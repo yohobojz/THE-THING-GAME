@@ -13,18 +13,17 @@
   <h2 id="status"></h2>
   <ul id="players"></ul>
 
-<h3>Chat</h3>
-<div id="chatBox" style="border:1px solid #ccc; padding:10px; width:300px; height:200px; overflow-y:scroll;"></div>
-<input id="chatInput" maxlength="120" placeholder="Type a message (max 120 chars)">
-<button onclick="sendMessage()">Send</button>
-<br>
-<button id="emergencyBtn" onclick="callMeeting()">Call Emergency Meeting</button>
-
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <h2 id="playerNumberDisplay"></h2>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <h3>Chat</h3>
+  <div id="chatBox" style="border:1px solid #ccc; padding:10px; width:300px; height:200px; overflow-y:scroll;"></div>
+  <input id="chatInput" maxlength="120" placeholder="Type a message (max 120 chars)">
+  <button onclick="sendMessage()">Send</button>
+  <br>
+  <button id="emergencyBtn" onclick="callMeeting()">Call Emergency Meeting</button>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
     let currentLobbyId = null;
@@ -41,6 +40,17 @@
 
     function startGame() {
       socket.emit('startGame', currentLobbyId);
+    }
+
+    function sendMessage() {
+      const msg = document.getElementById('chatInput').value;
+      socket.emit('sendMessage', msg);
+      document.getElementById('chatInput').value = '';
+    }
+
+    function callMeeting() {
+      socket.emit('callEmergencyMeeting');
+      document.getElementById('emergencyBtn').disabled = true;
     }
 
     socket.on('lobbyCreated', (data) => {
@@ -74,8 +84,24 @@
         `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}`;
     });
 
-    socket.on('lobbyError', (msg) => {
+    socket.on('receiveMessage', ({ from, text }) => {
+      const chatBox = document.getElementById('chatBox');
+      const p = document.createElement('p');
+      p.innerText = `${from}: ${text}`;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    socket.on('chatError', (msg) => {
       alert(msg);
+    });
+
+    socket.on('emergencyMeetingStarted', ({ calledBy }) => {
+      const chatBox = document.getElementById('chatBox');
+      const p = document.createElement('p');
+      p.innerText = `🚨 Emergency meeting called by ${calledBy}!`;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
     });
   </script>
 </body>
