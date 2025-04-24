@@ -1,10 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Lobby Game</title>
+  <title>Lobby System</title>
 </head>
 <body>
-  <h1>Hello from Render!</h1>
-  <p>If you see this, your lobby app is loading!</p>
+  <h1>Multiplayer Lobby</h1>
+
+  <button onclick="createLobby()">Create Lobby</button>
+  <input id="lobbyInput" placeholder="Enter Lobby ID">
+  <button onclick="joinLobby()">Join Lobby</button>
+
+  <h2 id="status"></h2>
+  <ul id="players"></ul>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    function createLobby() {
+      socket.emit('createLobby');
+    }
+
+    function joinLobby() {
+      const lobbyId = document.getElementById('lobbyInput').value;
+      socket.emit('joinLobby', lobbyId);
+    }
+
+    socket.on('lobbyCreated', (lobbyId) => {
+      document.getElementById('status').innerText = 'Lobby Created: ' + lobbyId;
+    });
+
+    socket.on('playerListUpdated', (players) => {
+      const list = document.getElementById('players');
+      list.innerHTML = '';
+      players.forEach(p => {
+        const li = document.createElement('li');
+        li.innerText = p;
+        list.appendChild(li);
+      });
+    });
+
+    socket.on('lobbyError', (msg) => {
+      alert(msg);
+    });
+  </script>
 </body>
 </html>
