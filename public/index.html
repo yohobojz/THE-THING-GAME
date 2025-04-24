@@ -13,9 +13,14 @@
   <h2 id="status"></h2>
   <ul id="players"></ul>
 
+  <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
+  <h2 id="playerNumberDisplay"></h2>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    let currentLobbyId = null;
+    let isHost = false;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -26,8 +31,23 @@
       socket.emit('joinLobby', lobbyId);
     }
 
-    socket.on('lobbyCreated', (lobbyId) => {
-      document.getElementById('status').innerText = 'Lobby Created: ' + lobbyId;
+    function startGame() {
+      socket.emit('startGame', currentLobbyId);
+    }
+
+    socket.on('lobbyCreated', (data) => {
+      currentLobbyId = data.lobbyId;
+      isHost = data.isHost;
+      document.getElementById('status').innerText = 'Lobby Created: ' + currentLobbyId;
+      if (isHost) {
+        document.getElementById('startGameBtn').style.display = 'block';
+      }
+    });
+
+    socket.on('lobbyJoined', (data) => {
+      currentLobbyId = data.lobbyId;
+      isHost = data.isHost;
+      document.getElementById('status').innerText = 'Joined Lobby: ' + currentLobbyId;
     });
 
     socket.on('playerListUpdated', (players) => {
@@ -38,6 +58,12 @@
         li.innerText = p;
         list.appendChild(li);
       });
+    });
+
+    socket.on('gameStarted', (data) => {
+      document.getElementById('startGameBtn').style.display = 'none';
+      document.getElementById('playerNumberDisplay').innerText =
+        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}`;
     });
 
     socket.on('lobbyError', (msg) => {
