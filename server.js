@@ -11,6 +11,71 @@ const lobbies = {}; // { LOBBY_ID: { players: [], host: socket.id } }
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
+// Data we'll need to manage
+const playerData = {}; // { socketId: { lobbyId, hasCalledMeeting, messagesThisRound, currentRoom, role } }
+let emergencyMeeting = {}; // { lobbyId: socketId or null }
+
+// New events
+socket.on('registerPlayer', ({ lobbyId }) => {
+  playerData[socket.id] = {
+    lobbyId,
+    hasCalledMeeting: false,
+    messagesThisRound: 0,
+    currentRoom: socket.id, // default: in their own room
+    role: 'unknown'
+  };
+});
+
+socket.on('sendMessage', (msg) => {
+  const data = playerData[socket.id];
+  if (!data) return;
+
+  const { lobbyId, currentRoom } = data;
+
+  if (msg.length > 120) {
+    socket.emit('chatError', 'Message too long!');
+    return;
+  }
+
+  if (data.messagesThisRound >= 1) {
+    socket.emit('chatError', 'Only 1 message per round!');
+    return;
+  }
+
+  data.messagesThisRound++;
+
+  // During emergency meeting, send to all
+  if (emergencyMeeting[lobbyId]) {
+    io.to(lobbyId).emit('receiveMessage', {
+      from: socket.id,
+      text: msg
+    });
+  } else {
+    // Normal: only players in the same room
+    const recipients = Object.keys(playerData).filter(
+      id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
+    );
+    recipients.forEach(id => {
+      io.to(id).emit('receiveMessage', {
+        from: socket.id,
+        text: msg
+      });
+    });
+  }
+});
+
+socket.on('callEmergencyMeeting', () => {
+  const data = playerData[socket.id];
+  if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
+
+  data.hasCalledMeeting = true;
+  emergencyMeeting[data.lobbyId] = socket.id;
+
+  io.to(data.lobbyId).emit('emergencyMeetingStarted', {
+    calledBy: socket.id
+  });
+});
+
   console.log('A user connected:', socket.id);
 
   socket.on('createLobby', () => {
