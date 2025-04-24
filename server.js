@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const lobbies = {};
+const lobbies = {}; // { LOBBY_ID: { players: [], host: socket.id } }
 
 app.use(express.static('public'));
 
@@ -15,25 +15,49 @@ io.on('connection', (socket) => {
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    lobbies[lobbyId] = [socket.id];
+    lobbies[lobbyId] = {
+      players: [socket.id],
+      host: socket.id
+    };
     socket.join(lobbyId);
-    socket.emit('lobbyCreated', lobbyId);
+    socket.emit('lobbyCreated', { lobbyId, isHost: true });
+    io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId].players);
   });
 
   socket.on('joinLobby', (lobbyId) => {
     if (lobbies[lobbyId]) {
-      lobbies[lobbyId].push(socket.id);
+      lobbies[lobbyId].players.push(socket.id);
       socket.join(lobbyId);
-      io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId]);
+      socket.emit('lobbyJoined', { lobbyId, isHost: false });
+      io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId].players);
     } else {
       socket.emit('lobbyError', 'Lobby does not exist.');
     }
   });
 
+  socket.on('startGame', (lobbyId) => {
+    const lobby = lobbies[lobbyId];
+    if (!lobby) return;
+
+    const players = lobby.players;
+
+    players.forEach((playerId, index) => {
+      io.to(playerId).emit('gameStarted', {
+        playerNumber: index + 1,
+        totalPlayers: players.length
+      });
+    });
+  });
+
   socket.on('disconnect', () => {
     for (const lobbyId in lobbies) {
-      lobbies[lobbyId] = lobbies[lobbyId].filter(id => id !== socket.id);
-      io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId]);
+      const lobby = lobbies[lobbyId];
+      lobby.players = lobby.players.filter(id => id !== socket.id);
+      io.to(lobbyId).emit('playerListUpdated', lobby.players);
+      // Clean up empty lobbies
+      if (lobby.players.length === 0) {
+        delete lobbies[lobbyId];
+      }
     }
     console.log('A user disconnected:', socket.id);
   });
