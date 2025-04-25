@@ -196,8 +196,10 @@
     });
 
     socket.on('youAreNowTheThing', () => {
-      alert("👾 You have consumed a player. You are now them.");
-    });
+  alert("👾 You have consumed a player. You are now them.");
+  myRole = "THE THING"; // 🛠 Set local role correctly
+  document.getElementById('consumeBtn').style.display = 'inline-block'; // 🛠 Reveal the consume button
+});
 
     socket.on('youHaveBeenConsumed', () => {
       alert("💀 You have been consumed by THE THING.");
