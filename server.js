@@ -19,12 +19,10 @@ function assignRoles(players) {
   roles[shuffled[0]] = "THE THING";
   roles[shuffled[1]] = "Engineer";
 
-  // Default everyone else to Intern
   for (let i = 2; i < shuffled.length; i++) {
     roles[shuffled[i]] = "Intern";
   }
 
-  // Pool of optional roles
   const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
   const internIds = shuffled.slice(2);
 
@@ -45,26 +43,6 @@ function assignRoles(players) {
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
-
-  socket.on('startGame', (lobbyId) => {
-  const lobby = lobbies[lobbyId];
-  if (!lobby) return;
-
-  const players = lobby.players;
-  const assignedRoles = assignRoles(players);
-
-  players.forEach((playerId, index) => {
-    if (playerData[playerId]) {
-      playerData[playerId].role = assignedRoles[playerId];
-    }
-
-    io.to(playerId).emit('gameStarted', {
-      playerNumber: index + 1,
-      totalPlayers: players.length,
-      role: assignedRoles[playerId]
-    });
-  });
-});
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
@@ -152,6 +130,26 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('startGame', (lobbyId) => {
+    const lobby = lobbies[lobbyId];
+    if (!lobby) return;
+
+    const players = lobby.players;
+    const assignedRoles = assignRoles(players);
+
+    players.forEach((playerId, index) => {
+      if (playerData[playerId]) {
+        playerData[playerId].role = assignedRoles[playerId];
+      }
+
+      io.to(playerId).emit('gameStarted', {
+        playerNumber: index + 1,
+        totalPlayers: players.length,
+        role: assignedRoles[playerId]
+      });
+    });
+  });
+
   socket.on('disconnect', () => {
     for (const lobbyId in lobbies) {
       const lobby = lobbies[lobbyId];
@@ -166,20 +164,6 @@ io.on('connection', (socket) => {
       }
     }
     console.log('A user disconnected:', socket.id);
-  });
-
-  socket.on('startGame', (lobbyId) => {
-    const lobby = lobbies[lobbyId];
-    if (!lobby) return;
-
-    const players = lobby.players;
-
-    players.forEach((playerId, index) => {
-      io.to(playerId).emit('gameStarted', {
-        playerNumber: index + 1,
-        totalPlayers: players.length
-      });
-    });
   });
 });
 
