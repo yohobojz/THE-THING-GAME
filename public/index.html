@@ -152,6 +152,12 @@ function chooseVisit() {
 socket.on('updatePlayerList', (players) => {
   const dropdown = document.getElementById("playerSelect");
   dropdown.innerHTML = "";
+if (players.length <= 1) {
+  const opt = document.createElement("option");
+  opt.text = "(waiting for other players...)";
+  opt.disabled = true;
+  dropdown.appendChild(opt);
+}
   players.forEach(p => {
     if (p !== socket.id) {
       const opt = document.createElement("option");
