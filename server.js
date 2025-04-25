@@ -162,7 +162,11 @@ io.on('connection', (socket) => {
   socket.on('endTurn', () => {
     const player = playerData[socket.id];
     if (!player) return;
-
+// ✋ Check if player is repeating the same action two turns in a row
+if (player.lastAction && player.intendedAction === player.lastAction) {
+  socket.emit("chatError", "You can't do the same move two rounds in a row!");
+  return;
+}
     const lobbyId = player.lobbyId;
     if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
 
@@ -171,6 +175,7 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Lock in action
     if (player.intendedAction === "hold") {
       player.currentRoom = socket.id;
     } else if (player.intendedAction === "visit" && player.intendedTarget) {
