@@ -149,9 +149,13 @@ if (!readyPlayers[lobbyId]) readyPlayers[lobbyId] = new Set();
 
 readyPlayers[lobbyId].add(socket.id);
 
+console.log(`[ROUND DEBUG] ${socket.id} acted. Ready count: ${readyPlayers[lobbyId].size}/${lobbies[lobbyId].players.length}`);
+
 const allIn = lobbies[lobbyId].players.every(id =>
   readyPlayers[lobbyId].has(id) || playerData[id]?.role === "DEAD"
 );
+
+console.log(`[ROUND DEBUG] Checking if all players ready in lobby ${lobbyId}...`);
 
 if (allIn) {
   roundNumber[lobbyId]++;
