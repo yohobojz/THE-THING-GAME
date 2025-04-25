@@ -127,23 +127,26 @@
     });
 
     socket.on('updatePlayerList', (players) => {
-      const dropdown = document.getElementById("playerSelect");
-      dropdown.innerHTML = "";
-      if (players.length <= 1) {
-        const opt = document.createElement("option");
-        opt.text = "(waiting for other players...)";
-        opt.disabled = true;
-        dropdown.appendChild(opt);
-      }
-      players.forEach(p => {
-        if (p !== socket.id) {
-          const opt = document.createElement("option");
-          opt.value = p;
-          opt.text = p;
-          dropdown.appendChild(opt);
-        }
-      });
-    });
+  const dropdown = document.getElementById("playerSelect");
+  dropdown.innerHTML = "";
+
+  if (players.length <= 1) {
+    const opt = document.createElement("option");
+    opt.text = "(waiting for other players...)";
+    opt.disabled = true;
+    dropdown.appendChild(opt);
+  }
+
+  players.forEach(p => {
+    if (p.id !== socket.id) {  // 🛠 Filter out yourself
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.text = p.name;
+      dropdown.appendChild(opt);
+    }
+  });
+});
+
 
     socket.on('gameStarted', (data) => {
       document.getElementById('startGameBtn').style.display = 'none';
