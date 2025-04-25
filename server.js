@@ -291,7 +291,6 @@ io.on('connection', (socket) => {
   const names = lobby.players.map(id => playerData[id]?.displayName || "Unknown");
   io.to(lobbyId).emit('playerListUpdated', names);
   io.to(lobbyId).emit('updatePlayerList', names);
-});
 
 
   });
