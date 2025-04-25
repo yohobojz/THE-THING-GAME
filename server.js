@@ -79,14 +79,14 @@ io.on('connection', (socket) => {
         hasCalledMeeting: false,
         messagesThisRound: 0,
         currentRoom: socket.id,
-        role: 'unknown',
+        role: '',
         lastAction: null
       };
       socket.join(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
-      const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || "Unknown");
-      io.to(lobbyId).emit('playerListUpdated', names);
-      io.to(lobbyId).emit('updatePlayerList', names);
+      const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
+    io.to(lobbyId).emit('playerListUpdated', names);
+    io.to(lobbyId).emit('updatePlayerList', names);
 
     } else {
       socket.emit('lobbyError', 'Lobby does not exist.');
