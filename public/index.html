@@ -21,6 +21,7 @@
 
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <button id="consumeBtn" onclick="consume()" style="display:none;">Consume Player</button>
+
   <h2 id="playerNumberDisplay"></h2>
   <p id="roundDisplay">Round: 1</p>
 
@@ -28,6 +29,7 @@
   <div id="chatBox" style="border:1px solid #ccc; padding:10px; width:300px; height:200px; overflow-y:scroll;"></div>
   <input id="chatInput" maxlength="120" placeholder="Type a message (max 120 chars)">
   <button onclick="sendMessage()">Send</button>
+
   <br>
   <button id="emergencyBtn" onclick="callMeeting()">Call Emergency Meeting</button>
 
@@ -38,8 +40,8 @@
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
 
-  <button id="submitMoveBtn" onclick="submitMove()" disabled>Submit Move</button> <!-- 🆕 -->
-  <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button> <!-- 🆕 -->
+  <button id="submitActionBtn" onclick="submitAction()" disabled>Submit Choice</button>
+  <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -47,7 +49,6 @@
     let currentLobbyId = null;
     let isHost = false;
     let myRole = null;
-    let moveChosen = false;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -74,38 +75,33 @@
     }
 
     function chooseHoldUp() {
-      socket.emit("roomAction", { action: "hold" });
-      document.getElementById("lastActionNotice").innerText = "You plan to hold up in your room.";
-      document.getElementById("submitMoveBtn").disabled = false;
-      moveChosen = true;
+      socket.emit('roomAction', { action: "hold" });
+      document.getElementById('lastActionNotice').innerText = "You plan to hold up in your room.";
+      document.getElementById('submitActionBtn').disabled = false;
     }
 
     function chooseVisit() {
-      const target = document.getElementById("playerSelect").value;
+      const target = document.getElementById('playerSelect').value;
       if (!target) {
         alert("Select a player to visit first!");
         return;
       }
-      socket.emit("roomAction", { action: "visit", target });
-      document.getElementById("lastActionNotice").innerText = "You plan to visit " + target + "'s room.";
-      document.getElementById("submitMoveBtn").disabled = false;
-      moveChosen = true;
+      socket.emit('roomAction', { action: "visit", target });
+      document.getElementById('lastActionNotice').innerText = "You plan to visit " + target + "'s room.";
+      document.getElementById('submitActionBtn').disabled = false;
     }
 
-    function submitMove() {
-      if (!moveChosen) {
-        alert("Pick a move before submitting!");
-        return;
-      }
-      document.getElementById("submitMoveBtn").disabled = true;
-      document.getElementById("endTurnBtn").disabled = false;
+    function submitAction() {
+      socket.emit('submitAction');
+      document.getElementById('submitActionBtn').disabled = true;
+      document.getElementById('endTurnBtn').disabled = false;
+      document.getElementById('lastActionNotice').innerText += " (locked in)";
     }
 
     function endTurn() {
-      socket.emit("endTurn");
-      document.getElementById("endTurnBtn").disabled = true;
-      document.getElementById("lastActionNotice").innerText = "You ended your turn.";
-      moveChosen = false;
+      socket.emit('endTurn');
+      document.getElementById('endTurnBtn').disabled = true;
+      document.getElementById('lastActionNotice').innerText = "You ended your turn.";
     }
 
     function consume() {
@@ -138,19 +134,17 @@
     });
 
     socket.on('updatePlayerList', (players) => {
-      const dropdown = document.getElementById("playerSelect");
+      const dropdown = document.getElementById('playerSelect');
       dropdown.innerHTML = "";
-
       if (players.length <= 1) {
-        const opt = document.createElement("option");
+        const opt = document.createElement('option');
         opt.text = "(waiting for other players...)";
         opt.disabled = true;
         dropdown.appendChild(opt);
       }
-
       players.forEach(p => {
         if (p.id !== socket.id) {
-          const opt = document.createElement("option");
+          const opt = document.createElement('option');
           opt.value = p.id;
           opt.text = p.name;
           dropdown.appendChild(opt);
@@ -181,9 +175,9 @@
          Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
 
       myRole = role;
-      document.getElementById('consumeBtn').style.display = myRole === "THE THING" ? 'inline-block' : 'none';
-      document.getElementById('endTurnBtn').disabled = true;
-      document.getElementById('submitMoveBtn').disabled = true;
+      if (myRole === "THE THING") {
+        document.getElementById('consumeBtn').style.display = 'inline-block';
+      }
     });
 
     socket.on('receiveMessage', ({ from, text }) => {
@@ -221,9 +215,9 @@
     });
 
     socket.on('newRoundStarted', ({ round }) => {
-      document.getElementById("roundDisplay").innerText = "Round: " + round;
+      document.getElementById('roundDisplay').innerText = "Round: " + round;
+      document.getElementById('submitActionBtn').disabled = true;
       document.getElementById('endTurnBtn').disabled = true;
-      document.getElementById('submitMoveBtn').disabled = true;
     });
   </script>
 </body>
