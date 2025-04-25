@@ -11,8 +11,8 @@ app.use(express.static('public'));
 const lobbies = {};
 const playerData = {};
 const emergencyMeeting = {};
-const roundNumber = {};
-const hasEndedTurn = {};
+const roundNumber = {}; // { lobbyId: number }
+const hasEndedTurn = {}; // { lobbyId: Set of players who clicked "End Turn" }
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -49,7 +49,10 @@ io.on('connection', (socket) => {
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    lobbies[lobbyId] = { players: [socket.id], host: socket.id };
+    lobbies[lobbyId] = {
+      players: [socket.id],
+      host: socket.id
+    };
     playerData[socket.id] = {
       lobbyId,
       hasCalledMeeting: false,
@@ -61,10 +64,10 @@ io.on('connection', (socket) => {
     emergencyMeeting[lobbyId] = null;
 
     socket.join(lobbyId);
-    socket.emit('lobbyCreated', { lobbyId, isHost: true });
 
-    const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
-    io.to(lobbyId).emit('updatePlayerList', playerInfos);
+    emitPlayerLists(lobbyId);
+
+    socket.emit('lobbyCreated', { lobbyId, isHost: true });
   });
 
   socket.on('joinLobby', (lobbyId) => {
@@ -79,10 +82,10 @@ io.on('connection', (socket) => {
         lastAction: null
       };
       socket.join(lobbyId);
-      socket.emit('lobbyJoined', { lobbyId, isHost: false });
 
-      const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
-      io.to(lobbyId).emit('updatePlayerList', playerInfos);
+      emitPlayerLists(lobbyId);
+
+      socket.emit('lobbyJoined', { lobbyId, isHost: false });
     } else {
       socket.emit('lobbyError', 'Lobby does not exist.');
     }
@@ -131,9 +134,7 @@ io.on('connection', (socket) => {
     data.hasCalledMeeting = true;
     emergencyMeeting[data.lobbyId] = socket.id;
 
-    io.to(data.lobbyId).emit('emergencyMeetingStarted', {
-      calledBy: socket.id
-    });
+    io.to(data.lobbyId).emit('emergencyMeetingStarted', { calledBy: socket.id });
   });
 
   socket.on('roomAction', ({ action, target }) => {
@@ -157,7 +158,7 @@ io.on('connection', (socket) => {
     console.log(`[SERVER] ${socket.id} chose to ${action}${target ? " " + target : ""} (waiting to end turn)`);
   });
 
-  socket.on("endTurn", () => {
+  socket.on('endTurn', () => {
     const player = playerData[socket.id];
     if (!player) return;
 
@@ -205,10 +206,7 @@ io.on('connection', (socket) => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
 
     const me = playerData[socket.id];
-    if (!me) {
-      console.log(`[SERVER] No player data found for ${socket.id}`);
-      return;
-    }
+    if (!me) return;
 
     const lobbyId = me.lobbyId;
     if (roundNumber[lobbyId] === 1) {
@@ -244,11 +242,7 @@ io.on('connection', (socket) => {
     playerData[socket.id].currentRoom = null;
 
     io.to(victimId).emit("youHaveBeenConsumed");
-    io.to(victimId).emit("gameStarted", {
-      playerNumber: "???",
-      totalPlayers: "???",
-      role: "DEAD"
-    });
+    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
 
     io.to(socket.id).emit("youAreNowTheThing");
 
@@ -261,12 +255,11 @@ io.on('connection', (socket) => {
       lobby.players = lobby.players.filter(id => id !== socket.id);
       delete playerData[socket.id];
 
-      const playerInfos = lobby.players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
-      io.to(lobbyId).emit('updatePlayerList', playerInfos);
-
       if (lobby.players.length === 0) {
         delete lobbies[lobbyId];
         delete emergencyMeeting[lobbyId];
+      } else {
+        emitPlayerLists(lobbyId);
       }
     }
     console.log('A user disconnected:', socket.id);
@@ -274,9 +267,10 @@ io.on('connection', (socket) => {
 
   socket.on('startGame', (lobbyId) => {
     const lobby = lobbies[lobbyId];
+    if (!lobby) return;
+
     roundNumber[lobbyId] = 1;
     hasEndedTurn[lobbyId] = new Set();
-    if (!lobby) return;
 
     const assignedRoles = assignRoles(lobby.players);
 
@@ -293,10 +287,19 @@ io.on('connection', (socket) => {
       });
     });
 
-    const playerInfos = lobby.players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
-    io.to(lobbyId).emit('updatePlayerList', playerInfos);
+    emitPlayerLists(lobbyId);
   });
 });
+
+function emitPlayerLists(lobbyId) {
+  const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
+  const playerInfos = lobbies[lobbyId].players.map(id => ({
+    id,
+    name: playerData[id]?.displayName || "Unknown"
+  }));
+  io.to(lobbyId).emit('playerListUpdated', names);
+  io.to(lobbyId).emit('updatePlayerList', playerInfos);
+}
 
 server.listen(3000, () => {
   console.log('Server running on http://localhost:3000');
