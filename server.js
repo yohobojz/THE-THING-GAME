@@ -12,6 +12,9 @@ const lobbies = {};
 const playerData = {};
 const emergencyMeeting = {};
 
+const roundNumber = {}; // { lobbyId: number }
+const readyPlayers = {}; // { lobbyId: Set of ready player socket IDs }
+
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
   const roles = {};
@@ -141,6 +144,30 @@ socket.on('roomAction', ({ action, target }) => {
     player.currentRoom = socket.id;
   } else if (action === "visit" && target && playerData[target]) {
     player.currentRoom = target;
+  const lobbyId = player.lobbyId;
+if (!readyPlayers[lobbyId]) readyPlayers[lobbyId] = new Set();
+
+readyPlayers[lobbyId].add(socket.id);
+
+const allIn = lobbies[lobbyId].players.every(id =>
+  readyPlayers[lobbyId].has(id) || playerData[id]?.role === "DEAD"
+);
+
+if (allIn) {
+  roundNumber[lobbyId]++;
+  readyPlayers[lobbyId].clear();
+
+  io.to(lobbyId).emit("newRoundStarted", {
+    round: roundNumber[lobbyId]
+  });
+
+  for (const id of lobbies[lobbyId].players) {
+    if (playerData[id]) {
+      playerData[id].messagesThisRound = 0;
+    }
+  }
+}
+
   }
 
   console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
@@ -150,6 +177,11 @@ socket.on('roomAction', ({ action, target }) => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
 
     const me = playerData[socket.id];
+    const lobbyId = me.lobbyId;
+if (roundNumber[lobbyId] === 1) {
+  socket.emit("consumeFailed", "You can't consume on Round 1.");
+  return;
+}
     if (!me) {
       console.log(`[SERVER] No player data found for ${socket.id}`);
       return;
@@ -212,6 +244,8 @@ socket.on('roomAction', ({ action, target }) => {
 
   socket.on('startGame', (lobbyId) => {
     const lobby = lobbies[lobbyId];
+    roundNumber[lobbyId] = 1;
+    readyPlayers[lobbyId] = new Set();
     if (!lobby) return;
 
     const assignedRoles = assignRoles(lobby.players);
