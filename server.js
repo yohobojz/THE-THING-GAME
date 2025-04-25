@@ -64,6 +64,7 @@ io.on('connection', (socket) => {
     socket.join(lobbyId);
     socket.emit('lobbyCreated', { lobbyId, isHost: true });
     io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId].players);
+    io.to(lobbyId).emit('updatePlayerList', lobbies[lobbyId].players);
   });
 
   socket.on('joinLobby', (lobbyId) => {
@@ -79,6 +80,7 @@ io.on('connection', (socket) => {
       socket.join(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
       io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId].players);
+      io.to(lobbyId).emit('updatePlayerList', lobbies[lobbyId].players);
     } else {
       socket.emit('lobbyError', 'Lobby does not exist.');
     }
