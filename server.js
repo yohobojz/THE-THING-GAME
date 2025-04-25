@@ -143,56 +143,74 @@ io.on('connection', (socket) => {
   });
 
   socket.on('roomAction', ({ action, target }) => {
-    const player = playerData[socket.id];
-    if (!player) return;
+  const player = playerData[socket.id];
+  if (!player) return;
 
-    if (player.lastAction === action) {
-      socket.emit("chatError", "You can't do the same action two rounds in a row!");
+  if (action === "hold") {
+    player.intendedAction = "hold";
+    player.intendedTarget = null;
+  } else if (action === "visit" && target && playerData[target]) {
+    if (target === socket.id) {
+      socket.emit("chatError", "You can't visit yourself!");
       return;
     }
+    player.intendedAction = "visit";
+    player.intendedTarget = target;
+  } else {
+    return; // Invalid action
+  }
 
-    if (action === "hold") {
-      player.currentRoom = socket.id;
-    } else if (action === "visit" && target && playerData[target]) {
-      player.currentRoom = target;
-    } else {
-      return; // Invalid action — skip
-    }
-
-    player.lastAction = action;
-    console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
-  });
+  console.log(`[SERVER] ${socket.id} chose to ${action}${target ? " " + target : ""} (waiting to end turn)`);
+});
 
   socket.on("endTurn", () => {
-    const player = playerData[socket.id];
-    if (!player) return;
+  const player = playerData[socket.id];
+  if (!player) return;
 
-    const lobbyId = player.lobbyId;
-    if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
+  const lobbyId = player.lobbyId;
+  if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
 
-    hasEndedTurn[lobbyId].add(socket.id);
+  // Validate if player even chose an action
+  if (!player.intendedAction) {
+    socket.emit("chatError", "You must choose hold or visit before ending your turn!");
+    return;
+  }
 
-    const allDone = lobbies[lobbyId].players.every(id =>
-      hasEndedTurn[lobbyId].has(id) || playerData[id]?.role === "DEAD"
-    );
+  // Lock in action officially
+  if (player.intendedAction === "hold") {
+    player.currentRoom = socket.id;
+  } else if (player.intendedAction === "visit" && player.intendedTarget) {
+    player.currentRoom = player.intendedTarget;
+  }
 
-    if (allDone) {
-      roundNumber[lobbyId]++;
-      hasEndedTurn[lobbyId].clear();
+  player.lastAction = player.intendedAction; // Set lastAction here at END TURN
+  player.intendedAction = null; // Clear for next round
+  player.intendedTarget = null; // Clear for next round
 
-      io.to(lobbyId).emit("newRoundStarted", {
-        round: roundNumber[lobbyId]
-      });
+  hasEndedTurn[lobbyId].add(socket.id);
 
-      console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+  const allDone = lobbies[lobbyId].players.every(id =>
+    hasEndedTurn[lobbyId].has(id) || playerData[id]?.role === "DEAD"
+  );
 
-      for (const id of lobbies[lobbyId].players) {
-        if (playerData[id]) {
-          playerData[id].messagesThisRound = 0;
-        }
+  if (allDone) {
+    roundNumber[lobbyId]++;
+    hasEndedTurn[lobbyId].clear();
+
+    io.to(lobbyId).emit("newRoundStarted", {
+      round: roundNumber[lobbyId]
+    });
+
+    console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+
+    for (const id of lobbies[lobbyId].players) {
+      if (playerData[id]) {
+        playerData[id].messagesThisRound = 0;
       }
     }
-  });
+  }
+});
+
 
   socket.on('consumePlayer', () => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
