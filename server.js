@@ -11,9 +11,8 @@ app.use(express.static('public'));
 const lobbies = {};
 const playerData = {};
 const emergencyMeeting = {};
-
 const roundNumber = {}; // { lobbyId: number }
-const readyPlayers = {}; // { lobbyId: Set of ready player socket IDs }
+const hasEndedTurn = {}; // { lobbyId: Set of players who clicked "End Turn" }
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -59,7 +58,8 @@ io.on('connection', (socket) => {
       hasCalledMeeting: false,
       messagesThisRound: 0,
       currentRoom: socket.id,
-      role: 'unknown'
+      role: 'unknown',
+      lastAction: null
     };
     emergencyMeeting[lobbyId] = null;
 
@@ -77,7 +77,8 @@ io.on('connection', (socket) => {
         hasCalledMeeting: false,
         messagesThisRound: 0,
         currentRoom: socket.id,
-        role: 'unknown'
+        role: 'unknown',
+        lastAction: null
       };
       socket.join(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
@@ -136,61 +137,70 @@ io.on('connection', (socket) => {
     });
   });
 
-socket.on('roomAction', ({ action, target }) => {
-  const player = playerData[socket.id];
-  if (!player) return;
+  socket.on('roomAction', ({ action, target }) => {
+    const player = playerData[socket.id];
+    if (!player) return;
 
-  if (action === "hold") {
-    player.currentRoom = socket.id;
-  } else if (action === "visit" && target && playerData[target]) {
-    player.currentRoom = target;
-  } else {
-    return; // Invalid action — skip
-  }
+    if (player.lastAction === action) {
+      socket.emit("chatError", "You can't do the same action two rounds in a row!");
+      return;
+    }
 
-  console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
+    if (action === "hold") {
+      player.currentRoom = socket.id;
+    } else if (action === "visit" && target && playerData[target]) {
+      player.currentRoom = target;
+    } else {
+      return; // Invalid action — skip
+    }
 
-  const lobbyId = player.lobbyId;
-  if (!readyPlayers[lobbyId]) readyPlayers[lobbyId] = new Set();
+    player.lastAction = action;
+    console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
+  });
 
-  readyPlayers[lobbyId].add(socket.id);
+  socket.on("endTurn", () => {
+    const player = playerData[socket.id];
+    if (!player) return;
 
-  console.log(`[ROUND DEBUG] ${socket.id} acted. Ready count: ${readyPlayers[lobbyId].size}/${lobbies[lobbyId].players.length}`);
-  console.log(`[ROUND DEBUG] Checking if all players ready in lobby ${lobbyId}...`);
+    const lobbyId = player.lobbyId;
+    if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
 
-  const allIn = lobbies[lobbyId].players.every(id =>
-    readyPlayers[lobbyId].has(id) || playerData[id]?.role === "DEAD"
-  );
+    hasEndedTurn[lobbyId].add(socket.id);
 
-  if (allIn) {
-    roundNumber[lobbyId]++;
-    readyPlayers[lobbyId].clear();
+    const allDone = lobbies[lobbyId].players.every(id =>
+      hasEndedTurn[lobbyId].has(id) || playerData[id]?.role === "DEAD"
+    );
 
-    io.to(lobbyId).emit("newRoundStarted", {
-      round: roundNumber[lobbyId]
-    });
+    if (allDone) {
+      roundNumber[lobbyId]++;
+      hasEndedTurn[lobbyId].clear();
 
-    console.log(`[ROUND DEBUG] All players ready. Advancing to round ${roundNumber[lobbyId]}.`);
+      io.to(lobbyId).emit("newRoundStarted", {
+        round: roundNumber[lobbyId]
+      });
 
-    for (const id of lobbies[lobbyId].players) {
-      if (playerData[id]) {
-        playerData[id].messagesThisRound = 0;
+      console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+
+      for (const id of lobbies[lobbyId].players) {
+        if (playerData[id]) {
+          playerData[id].messagesThisRound = 0;
+        }
       }
     }
-  }
-});
+  });
 
   socket.on('consumePlayer', () => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
 
     const me = playerData[socket.id];
-    const lobbyId = me.lobbyId;
-if (roundNumber[lobbyId] === 1) {
-  socket.emit("consumeFailed", "You can't consume on Round 1.");
-  return;
-}
     if (!me) {
       console.log(`[SERVER] No player data found for ${socket.id}`);
+      return;
+    }
+
+    const lobbyId = me.lobbyId;
+    if (roundNumber[lobbyId] === 1) {
+      socket.emit("consumeFailed", "You can't consume on Round 1.");
       return;
     }
 
@@ -252,7 +262,7 @@ if (roundNumber[lobbyId] === 1) {
   socket.on('startGame', (lobbyId) => {
     const lobby = lobbies[lobbyId];
     roundNumber[lobbyId] = 1;
-    readyPlayers[lobbyId] = new Set();
+    hasEndedTurn[lobbyId] = new Set();
     if (!lobby) return;
 
     const assignedRoles = assignRoles(lobby.players);
