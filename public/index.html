@@ -18,7 +18,7 @@
   <button onclick="joinLobby()">Join Lobby</button>
 
   <h2 id="status"></h2>
-  <ul id="players"></ul>
+  <ul id="players"></ul> <!-- ✅ Player display section -->
 
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <button id="consumeBtn" onclick="consume()" style="display:none;">Consume Player</button>
@@ -38,8 +38,7 @@
   <button onclick="chooseHoldUp()">Hold Up</button>
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
-  
-  <!-- ✅ New End Turn button -->
+
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -91,7 +90,6 @@
     }
 
     function consume() {
-      console.log("Attempting to consume a player...");
       socket.emit("consumePlayer");
     }
 
@@ -127,26 +125,25 @@
     });
 
     socket.on('updatePlayerList', (players) => {
-  const dropdown = document.getElementById("playerSelect");
-  dropdown.innerHTML = "";
+      const dropdown = document.getElementById("playerSelect");
+      dropdown.innerHTML = "";
 
-  if (players.length <= 1) {
-    const opt = document.createElement("option");
-    opt.text = "(waiting for other players...)";
-    opt.disabled = true;
-    dropdown.appendChild(opt);
-  }
+      if (players.length <= 1) {
+        const opt = document.createElement("option");
+        opt.text = "(waiting for other players...)";
+        opt.disabled = true;
+        dropdown.appendChild(opt);
+      }
 
-  players.forEach(p => {
-    if (p.id !== socket.id) {  // 🛠 Filter out yourself
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.text = p.name;
-      dropdown.appendChild(opt);
-    }
-  });
-});
-
+      players.forEach(p => {
+        if (p.id !== socket.id) { // ✅ Correct filtering
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.text = p.name;
+          dropdown.appendChild(opt);
+        }
+      });
+    });
 
     socket.on('gameStarted', (data) => {
       document.getElementById('startGameBtn').style.display = 'none';
@@ -206,9 +203,9 @@
       alert("💀 You have been consumed by THE THING.");
     });
 
-    socket.on("newRoundStarted", ({ round }) => {
-      document.getElementById("roundDisplay").innerText = "Round: " + round;
-      document.getElementById("endTurnBtn").disabled = true;
+    socket.on('newRoundStarted', ({ round }) => {
+      document.getElementById('roundDisplay').innerText = "Round: " + round;
+      document.getElementById('endTurnBtn').disabled = true;
     });
   </script>
 </body>
