@@ -33,7 +33,7 @@
   <p id="lastActionNotice"></p>
 
   <!-- 🆕 New End Turn Button -->
-  <button onclick="endTurn()">End Turn</button>
+  <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -68,25 +68,27 @@
     }
 
     function chooseHoldUp() {
-      if (lastAction === "hold") {
-        alert("You can't hold up two rounds in a row!");
-        return;
-      }
-      socket.emit("roomAction", { action: "hold" });
-      lastAction = "hold";
-      document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
-    }
+  if (lastAction === "hold") {
+    alert("You can't hold up two rounds in a row!");
+    return;
+  }
+  socket.emit("roomAction", { action: "hold" });
+  lastAction = "hold";
+  document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
+  document.getElementById("endTurnBtn").disabled = false; // ✅ Enable End Turn
+}
 
     function chooseVisit() {
-      if (lastAction === "visit") {
-        alert("You can't visit two rounds in a row!");
-        return;
-      }
-      const target = document.getElementById("playerSelect").value;
-      socket.emit("roomAction", { action: "visit", target });
-      lastAction = "visit";
-      document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
-    }
+  if (lastAction === "visit") {
+    alert("You can't visit two rounds in a row!");
+    return;
+  }
+  const target = document.getElementById("playerSelect").value;
+  socket.emit("roomAction", { action: "visit", target });
+  lastAction = "visit";
+  document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
+  document.getElementById("endTurnBtn").disabled = false; // ✅ Enable End Turn
+}
 
     function consume() {
       console.log("Attempting to consume a player...");
@@ -204,9 +206,11 @@
     });
 
     socket.on("newRoundStarted", ({ round }) => {
-      document.getElementById("roundDisplay").innerText = "Round: " + round;
-      lastAction = null;
-    });
+  document.getElementById("roundDisplay").innerText = "Round: " + round;
+  lastAction = null;
+  document.getElementById("endTurnBtn").disabled = true; // ✅ Disable End Turn at new round
+});
+
   </script>
 </body>
 </html>
