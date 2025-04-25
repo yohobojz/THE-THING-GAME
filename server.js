@@ -11,9 +11,9 @@ app.use(express.static('public'));
 const lobbies = {};
 const playerData = {};
 const emergencyMeeting = {};
-const roundNumber = {}; // { lobbyId: number }
-const hasEndedTurn = {}; // { lobbyId: Set of players who clicked "End Turn" }
-const bioscannerBuilt = {}; // 🆕 { lobbyId: true/false }
+const roundNumber = {};
+const hasEndedTurn = {};
+const bioscannerBuilt = {};
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -50,80 +50,43 @@ io.on('connection', (socket) => {
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    lobbies[lobbyId] = {
-      players: [socket.id],
-      host: socket.id
-    };
-    playerData[socket.id] = {
-      lobbyId,
-      hasCalledMeeting: false,
-      messagesThisRound: 0,
-      currentRoom: socket.id,
-      role: 'unknown',
-      lastAction: null
-    };
+    lobbies[lobbyId] = { players: [socket.id], host: socket.id };
+    playerData[socket.id] = createNewPlayer(socket.id, lobbyId);
     emergencyMeeting[lobbyId] = null;
 
     socket.join(lobbyId);
-
     emitPlayerLists(lobbyId);
-
     socket.emit('lobbyCreated', { lobbyId, isHost: true });
   });
 
   socket.on('joinLobby', (lobbyId) => {
-    if (lobbies[lobbyId]) {
-      lobbies[lobbyId].players.push(socket.id);
-      playerData[socket.id] = {
-        lobbyId,
-        hasCalledMeeting: false,
-        messagesThisRound: 0,
-        currentRoom: socket.id,
-        role: 'unknown',
-        lastAction: null
-      };
-      socket.join(lobbyId);
+    if (!lobbies[lobbyId]) return socket.emit('lobbyError', 'Lobby does not exist.');
+    lobbies[lobbyId].players.push(socket.id);
+    playerData[socket.id] = createNewPlayer(socket.id, lobbyId);
 
-      emitPlayerLists(lobbyId);
-
-      socket.emit('lobbyJoined', { lobbyId, isHost: false });
-    } else {
-      socket.emit('lobbyError', 'Lobby does not exist.');
-    }
+    socket.join(lobbyId);
+    emitPlayerLists(lobbyId);
+    socket.emit('lobbyJoined', { lobbyId, isHost: false });
   });
 
   socket.on('sendMessage', (msg) => {
     const data = playerData[socket.id];
     if (!data) return;
 
-    const { lobbyId, currentRoom } = data;
-
-    if (msg.length > 120) {
-      socket.emit('chatError', 'Message too long!');
-      return;
-    }
-
-    if (data.messagesThisRound >= 1) {
-      socket.emit('chatError', 'Only 1 message per round!');
-      return;
-    }
+    if (msg.length > 120) return socket.emit('chatError', 'Message too long!');
+    if (data.messagesThisRound >= 1) return socket.emit('chatError', 'Only 1 message per round!');
 
     data.messagesThisRound++;
 
-    if (emergencyMeeting[lobbyId]) {
-      io.to(lobbyId).emit('receiveMessage', {
-        from: playerData[socket.id]?.displayName || "Unknown",
-        text: msg
-      });
+    if (emergencyMeeting[data.lobbyId]) {
+      io.to(data.lobbyId).emit('receiveMessage', { from: data.displayName || "Unknown", text: msg });
     } else {
-      const recipients = Object.keys(playerData).filter(
-        id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
+      const recipients = Object.keys(playerData).filter(id =>
+        playerData[id].lobbyId === data.lobbyId &&
+        playerData[id].currentRoom === data.currentRoom
       );
       recipients.forEach(id => {
-        io.to(id).emit('receiveMessage', {
-          from: playerData[socket.id]?.displayName || "Unknown",
-          text: msg
-        });
+        io.to(id).emit('receiveMessage', { from: data.displayName || "Unknown", text: msg });
       });
     }
   });
@@ -134,8 +97,7 @@ io.on('connection', (socket) => {
 
     data.hasCalledMeeting = true;
     emergencyMeeting[data.lobbyId] = socket.id;
-
-    io.to(data.lobbyId).emit('emergencyMeetingStarted', { calledBy: socket.id });
+    io.to(data.lobbyId).emit('emergencyMeetingStarted', { calledBy: data.displayName || socket.id });
   });
 
   socket.on('roomAction', ({ action, target }) => {
@@ -146,46 +108,34 @@ io.on('connection', (socket) => {
       player.intendedAction = "hold";
       player.intendedTarget = null;
     } else if (action === "visit" && target && playerData[target]) {
-      if (target === socket.id) {
-        socket.emit("chatError", "You can't visit yourself!");
-        return;
-      }
+      if (target === socket.id) return socket.emit("chatError", "You can't visit yourself!");
       player.intendedAction = "visit";
       player.intendedTarget = target;
     } else {
       return;
     }
 
-    console.log(`[SERVER] ${socket.id} chose to ${action}${target ? " " + target : ""} (waiting to end turn)`);
+    console.log(`[SERVER] ${socket.id} plans to ${action}${target ? " " + target : ""}`);
   });
 
   socket.on('endTurn', () => {
     const player = playerData[socket.id];
     if (!player) return;
-// ✋ Check if player is repeating the same action two turns in a row
-if (player.lastAction && player.intendedAction === player.lastAction) {
-  socket.emit("chatError", "You can't do the same move two rounds in a row!");
-  return;
-}
+
     const lobbyId = player.lobbyId;
     if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
 
-    if (!player.intendedAction) {
-      socket.emit("chatError", "You must choose hold or visit before ending your turn!");
-      return;
+    if (!player.intendedAction) return socket.emit("chatError", "You must choose hold or visit before ending your turn!");
+
+    if (player.lastAction && player.intendedAction === player.lastAction) {
+      return socket.emit("chatError", "You can't do the same move two rounds in a row!");
     }
 
-    // Lock in action
-    if (player.intendedAction === "hold") {
-      player.currentRoom = socket.id;
-    } else if (player.intendedAction === "visit" && player.intendedTarget) {
-      player.currentRoom = player.intendedTarget;
-    }
-
+    // Lock action officially
+    player.currentRoom = (player.intendedAction === "hold") ? socket.id : player.intendedTarget;
     player.lastAction = player.intendedAction;
     player.intendedAction = null;
     player.intendedTarget = null;
-
     hasEndedTurn[lobbyId].add(socket.id);
 
     const allDone = lobbies[lobbyId].players.every(id =>
@@ -193,68 +143,47 @@ if (player.lastAction && player.intendedAction === player.lastAction) {
     );
 
     if (allDone) {
-  roundNumber[lobbyId]++;
-  hasEndedTurn[lobbyId].clear();
+      roundNumber[lobbyId]++;
+      hasEndedTurn[lobbyId].clear();
 
-  io.to(lobbyId).emit("newRoundStarted", {
-    round: roundNumber[lobbyId]
-  });
+      io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
+      console.log(`[ROUND DEBUG] Round advanced to ${roundNumber[lobbyId]}`);
 
-  console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+      lobbies[lobbyId].players.forEach(id => {
+        if (playerData[id]) {
+          playerData[id].messagesThisRound = 0;
+          if (playerData[id].role === "Engineer") {
+            playerData[id].roundsSurvived++;
+            console.log(`[ENGINEER DEBUG] ${id} has survived ${playerData[id].roundsSurvived} rounds.`);
 
-  for (const id of lobbies[lobbyId].players) {
-    if (playerData[id]) {
-      playerData[id].messagesThisRound = 0;
-
-      if (playerData[id].role === "Engineer") {
-  playerData[id].roundsSurvived++;
-  console.log(`[DEBUG] Engineer ${id} has now survived ${playerData[id].roundsSurvived} rounds.`);
-
-  if (playerData[id].roundsSurvived >= 3 && !playerData[id].bioscannerBuilt) {
-    playerData[id].bioscannerBuilt = true;
-    io.to(id).emit("bioscannerReady");
-    console.log(`[DEBUG] Engineer ${id} has built their bioscanner!`);
-  }
-}
-
+            if (playerData[id].roundsSurvived >= 3 && !playerData[id].bioscannerBuilt) {
+              playerData[id].bioscannerBuilt = true;
+              io.to(id).emit("bioscannerReady");
+              console.log(`[ENGINEER DEBUG] ${id} built bioscanner!`);
+            }
+          }
+        }
+      });
     }
-  }
-}
-
   });
 
   socket.on('consumePlayer', () => {
-    console.log(`[SERVER] Consume attempt from ${socket.id}`);
-
+    console.log(`[SERVER] Consume attempt by ${socket.id}`);
     const me = playerData[socket.id];
     if (!me) return;
 
     const lobbyId = me.lobbyId;
-    if (roundNumber[lobbyId] === 1) {
-      socket.emit("consumeFailed", "You can't consume on Round 1.");
-      return;
-    }
-
-    if (me.role !== "THE THING") {
-      console.log(`[SERVER] ${socket.id} is not THE THING (they are ${me.role})`);
-      return;
-    }
-
-    console.log(`[SERVER] ${socket.id} is in room: ${me.currentRoom}`);
+    if (roundNumber[lobbyId] === 1) return socket.emit("consumeFailed", "You can't consume on Round 1.");
+    if (me.role !== "THE THING") return console.log(`[SERVER] ${socket.id} attempted to consume but is not THE THING.`);
 
     const roomMates = Object.entries(playerData).filter(([id, p]) =>
-      p.lobbyId === me.lobbyId &&
+      p.lobbyId === lobbyId &&
       p.currentRoom === me.currentRoom &&
       id !== socket.id &&
       p.role !== "DEAD"
     );
 
-    console.log(`[SERVER] Found ${roomMates.length} roommates:`, roomMates.map(([id]) => id));
-
-    if (roomMates.length !== 1) {
-      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-      return;
-    }
+    if (roomMates.length !== 1) return socket.emit("consumeFailed", "You must be alone with exactly one other player.");
 
     const [victimId] = roomMates[0];
 
@@ -264,7 +193,6 @@ if (player.lastAction && player.intendedAction === player.lastAction) {
 
     io.to(victimId).emit("youHaveBeenConsumed");
     io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
-
     io.to(socket.id).emit("youAreNowTheThing");
 
     console.log(`[SERVER] ${socket.id} successfully consumed ${victimId}`);
@@ -296,23 +224,37 @@ if (player.lastAction && player.intendedAction === player.lastAction) {
     const assignedRoles = assignRoles(lobby.players);
 
     lobby.players.forEach((playerId, index) => {
-  if (playerData[playerId]) {
-    playerData[playerId].role = assignedRoles[playerId];
-    playerData[playerId].displayName = "Player " + (index + 1);
-    playerData[playerId].roundsSurvived = 0; // 🆕 Track rounds survived
-  }
+      playerData[playerId].role = assignedRoles[playerId];
+      playerData[playerId].displayName = "Player " + (index + 1);
+      playerData[playerId].roundsSurvived = 0;
+    });
 
-  io.to(playerId).emit('gameStarted', {
-    playerNumber: index + 1,
-    totalPlayers: lobby.players.length,
-    role: assignedRoles[playerId]
-  });
-});
-
+    lobby.players.forEach((playerId, index) => {
+      io.to(playerId).emit('gameStarted', {
+        playerNumber: index + 1,
+        totalPlayers: lobby.players.length,
+        role: assignedRoles[playerId]
+      });
+    });
 
     emitPlayerLists(lobbyId);
   });
 });
+
+function createNewPlayer(id, lobbyId) {
+  return {
+    lobbyId,
+    hasCalledMeeting: false,
+    messagesThisRound: 0,
+    currentRoom: id,
+    role: 'unknown',
+    lastAction: null,
+    intendedAction: null,
+    intendedTarget: null,
+    roundsSurvived: 0,
+    bioscannerBuilt: false,
+  };
+}
 
 function emitPlayerLists(lobbyId) {
   const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
