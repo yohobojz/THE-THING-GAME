@@ -25,13 +25,19 @@ function assignRoles(players) {
 
   const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
   const internIds = shuffled.slice(2);
-  const pool = optionalRoles.sort(() => Math.random() - 0.5);
+  const playerCount = players.length;
 
-  const count = Math.min(pool.length, internIds.length);
-  for (let i = 0; i < count; i++) {
-    if (roles[internIds[i]] === "Intern") {
-      roles[internIds[i]] = pool[i];
-    }
+  // Set guaranteed Intern count based on total player count
+  let guaranteedInternCount = 0;
+  if (playerCount >= 8) guaranteedInternCount = 2;
+  else if (playerCount >= 6) guaranteedInternCount = 1;
+
+  const assignableCount = Math.max(0, internIds.length - guaranteedInternCount);
+  const shuffledOptional = optionalRoles.sort(() => Math.random() - 0.5);
+
+  for (let i = 0; i < assignableCount && i < shuffledOptional.length; i++) {
+    const playerId = internIds[i];
+    roles[playerId] = shuffledOptional[i];
   }
 
   return roles;
