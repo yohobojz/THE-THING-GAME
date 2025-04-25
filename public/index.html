@@ -79,10 +79,10 @@
     });
 
     socket.on('gameStarted', (data) => {
-      document.getElementById('startGameBtn').style.display = 'none';
-      document.getElementById('playerNumberDisplay').innerText =
-        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}`;
-    });
+  document.getElementById('startGameBtn').style.display = 'none';
+  document.getElementById('playerNumberDisplay').innerText =
+    `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}. Your role: ${data.role}`;
+});
 
     socket.on('receiveMessage', ({ from, text }) => {
       const chatBox = document.getElementById('chatBox');
