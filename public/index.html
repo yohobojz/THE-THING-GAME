@@ -22,12 +22,20 @@
   <button onclick="sendMessage()">Send</button>
   <br>
   <button id="emergencyBtn" onclick="callMeeting()">Call Emergency Meeting</button>
+    <h3>Room Actions</h3>
+<select id="playerSelect"></select>
+<br>
+<button onclick="chooseHoldUp()">Hold Up</button>
+<button onclick="chooseVisit()">Visit Room</button>
+<p id="lastActionNotice"></p>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
     let currentLobbyId = null;
     let isHost = false;
+    let lastAction = null; // "hold" or "visit"
+
 
     function createLobby() {
       socket.emit('createLobby');
