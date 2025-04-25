@@ -123,10 +123,21 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('callEmergencyMeeting', () => {
-  socket.on('consumePlayer', () => {
+  socket.on('callEmergencyMeeting', () => {socket.on('consumePlayer', () => {
+  console.log(`[SERVER] Consume attempt from ${socket.id}`);
+
   const me = playerData[socket.id];
-  if (!me || me.role !== "THE THING") return;
+  if (!me) {
+    console.log(`[SERVER] No player data found for ${socket.id}`);
+    return;
+  }
+
+  if (me.role !== "THE THING") {
+    console.log(`[SERVER] ${socket.id} is not THE THING (they are ${me.role})`);
+    return;
+  }
+
+  console.log(`[SERVER] ${socket.id} is in room: ${me.currentRoom}`);
 
   const roomMates = Object.entries(playerData).filter(([id, p]) =>
     p.lobbyId === me.lobbyId &&
@@ -134,6 +145,8 @@ io.on('connection', (socket) => {
     id !== socket.id &&
     p.role !== "DEAD"
   );
+
+  console.log(`[SERVER] Found ${roomMates.length} roommates:`, roomMates.map(([id]) => id));
 
   if (roomMates.length !== 1) {
     socket.emit("consumeFailed", "You must be alone with exactly one other player.");
@@ -147,7 +160,7 @@ io.on('connection', (socket) => {
   playerData[victimId].role = "THE THING";
   playerData[socket.id].currentRoom = null;
 
-  // Notify both
+  // Notify both players
   io.to(victimId).emit("youHaveBeenConsumed");
   io.to(victimId).emit("gameStarted", {
     playerNumber: "???",
@@ -155,11 +168,11 @@ io.on('connection', (socket) => {
     role: "DEAD"
   });
 
-  io.to(victimId).emit("chatError", "You are dead.");
-
-  io.to(victimId).emit("updatePlayerList", []); // hide dropdown
   io.to(socket.id).emit("youAreNowTheThing");
+
+  console.log(`[SERVER] ${socket.id} successfully consumed ${victimId}`);
 });
+
     const data = playerData[socket.id];
     if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
 
