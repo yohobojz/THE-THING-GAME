@@ -43,13 +43,28 @@ function assignRoles(players) {
   return roles;
 }
 
+// Function to track round survival for Engineer
+function trackEngineerSurvival(playerId) {
+  const player = playerData[playerId];
+
+  if (player && player.role === 'Engineer') {
+    player.roundsSurvived = (player.roundsSurvived || 0) + 1;
+
+    // If the Engineer survives 3 rounds, unlock the bioscanner
+    if (player.roundsSurvived >= 3 && !player.bioscannerReady) {
+      player.bioscannerReady = true;
+      console.log(`${player.displayName} has unlocked the bioscanner!`);
+    }
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
     lobbies[lobbyId] = { players: [socket.id], host: socket.id };
-    playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false };
+    playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
     emergencyMeeting[lobbyId] = null;
     socket.join(lobbyId);
     emitPlayerLists(lobbyId);
@@ -59,7 +74,7 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', (lobbyId) => {
     if (lobbies[lobbyId]) {
       lobbies[lobbyId].players.push(socket.id);
-      playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false };
+      playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
       socket.join(lobbyId);
       emitPlayerLists(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
@@ -225,6 +240,33 @@ io.on('connection', (socket) => {
     io.to(socket.id).emit("youAreNowTheThing");
 
     console.log(`[SERVER] ${socket.id} successfully consumed ${victimId}`);
+  });
+
+  socket.on('scanPlayer', ({ target }) => {
+    const player = playerData[socket.id]; // Current player (Engineer)
+    const targetPlayer = playerData[target]; // Target player to be scanned
+
+    if (!player || player.role !== 'Engineer') return;
+
+    // Check if the Engineer has unlocked the bioscanner
+    if (!player.bioscannerReady) {
+      socket.emit('chatError', 'Bioscanner is not unlocked yet. Survive 3 rounds first!');
+      return;
+    }
+
+    if (!targetPlayer) {
+      socket.emit('chatError', 'Player not found!');
+      return;
+    }
+
+    // Check if the target player is THE THING
+    const isTheThing = targetPlayer.role === 'THE THING';
+
+    // Emit the result of the scan back to the Engineer
+    socket.emit('scanResult', {
+      playerName: targetPlayer.displayName,
+      isTheThing,
+    });
   });
 
   socket.on('startGame', (lobbyId) => {
