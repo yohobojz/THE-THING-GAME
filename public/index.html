@@ -2,6 +2,13 @@
 <html>
 <head>
   <title>Lobby System</title>
+  <style>
+    /* 🆕 Tiny polish: highlight dropdown on hover */
+    select#playerSelect option:hover {
+      font-weight: bold;
+      background-color: #f0f0f0;
+    }
+  </style>
 </head>
 <body>
   <h1>Multiplayer Lobby</h1>
@@ -31,8 +38,8 @@
   <button onclick="chooseHoldUp()">Hold Up</button>
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
-
-  <!-- 🆕 New End Turn Button -->
+  
+  <!-- ✅ New End Turn button -->
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -41,7 +48,6 @@
     let currentLobbyId = null;
     let isHost = false;
     let myRole = null;
-    let lastAction = null;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -68,27 +74,21 @@
     }
 
     function chooseHoldUp() {
-  if (lastAction === "hold") {
-    alert("You can't hold up two rounds in a row!");
-    return;
-  }
-  socket.emit("roomAction", { action: "hold" });
-  lastAction = "hold";
-  document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
-  document.getElementById("endTurnBtn").disabled = false; // ✅ Enable End Turn
-}
+      socket.emit("roomAction", { action: "hold" });
+      document.getElementById("lastActionNotice").innerText = "You plan to hold up in your room.";
+      document.getElementById("endTurnBtn").disabled = false;
+    }
 
     function chooseVisit() {
-  if (lastAction === "visit") {
-    alert("You can't visit two rounds in a row!");
-    return;
-  }
-  const target = document.getElementById("playerSelect").value;
-  socket.emit("roomAction", { action: "visit", target });
-  lastAction = "visit";
-  document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
-  document.getElementById("endTurnBtn").disabled = false; // ✅ Enable End Turn
-}
+      const target = document.getElementById("playerSelect").value;
+      if (!target) {
+        alert("Select a player to visit first!");
+        return;
+      }
+      socket.emit("roomAction", { action: "visit", target });
+      document.getElementById("lastActionNotice").innerText = "You plan to visit " + target + "'s room.";
+      document.getElementById("endTurnBtn").disabled = false;
+    }
 
     function consume() {
       console.log("Attempting to consume a player...");
@@ -97,6 +97,8 @@
 
     function endTurn() {
       socket.emit("endTurn");
+      document.getElementById("endTurnBtn").disabled = true;
+      document.getElementById("lastActionNotice").innerText = "You ended your turn.";
     }
 
     socket.on('lobbyCreated', (data) => {
@@ -166,11 +168,7 @@
          Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
 
       myRole = role;
-      lastAction = null;
-
-      if (myRole === "THE THING") {
-        document.getElementById('consumeBtn').style.display = 'inline-block';
-      }
+      document.getElementById('endTurnBtn').disabled = true;
     });
 
     socket.on('receiveMessage', ({ from, text }) => {
@@ -206,11 +204,9 @@
     });
 
     socket.on("newRoundStarted", ({ round }) => {
-  document.getElementById("roundDisplay").innerText = "Round: " + round;
-  lastAction = null;
-  document.getElementById("endTurnBtn").disabled = true; // ✅ Disable End Turn at new round
-});
-
+      document.getElementById("roundDisplay").innerText = "Round: " + round;
+      document.getElementById("endTurnBtn").disabled = true;
+    });
   </script>
 </body>
 </html>
