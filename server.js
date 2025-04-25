@@ -13,6 +13,7 @@ const playerData = {};
 const emergencyMeeting = {};
 const roundNumber = {}; // { lobbyId: number }
 const hasEndedTurn = {}; // { lobbyId: Set of players who clicked "End Turn" }
+const bioscannerBuilt = {}; // 🆕 { lobbyId: true/false }
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -275,17 +276,19 @@ io.on('connection', (socket) => {
     const assignedRoles = assignRoles(lobby.players);
 
     lobby.players.forEach((playerId, index) => {
-      if (playerData[playerId]) {
-        playerData[playerId].role = assignedRoles[playerId];
-        playerData[playerId].displayName = "Player " + (index + 1);
-      }
+  if (playerData[playerId]) {
+    playerData[playerId].role = assignedRoles[playerId];
+    playerData[playerId].displayName = "Player " + (index + 1);
+    playerData[playerId].roundsSurvived = 0; // 🆕 Track rounds survived
+  }
 
-      io.to(playerId).emit('gameStarted', {
-        playerNumber: index + 1,
-        totalPlayers: lobby.players.length,
-        role: assignedRoles[playerId]
-      });
-    });
+  io.to(playerId).emit('gameStarted', {
+    playerNumber: index + 1,
+    totalPlayers: lobby.players.length,
+    role: assignedRoles[playerId]
+  });
+});
+
 
     emitPlayerLists(lobbyId);
   });
