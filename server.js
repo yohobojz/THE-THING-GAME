@@ -144,18 +144,24 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', (lobbyId) => {
-    const lobby = lobbies[lobbyId];
-    if (!lobby) return;
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
 
-    const players = lobby.players;
+  const assignedRoles = assignRoles(lobby.players);
 
-    players.forEach((playerId, index) => {
-      io.to(playerId).emit('gameStarted', {
-        playerNumber: index + 1,
-        totalPlayers: players.length
-      });
+  lobby.players.forEach((playerId, index) => {
+    if (playerData[playerId]) {
+      playerData[playerId].role = assignedRoles[playerId];
+    }
+
+    io.to(playerId).emit('gameStarted', {
+      playerNumber: index + 1,
+      totalPlayers: lobby.players.length,
+      role: assignedRoles[playerId]
     });
   });
+});
+
 });
 
 server.listen(3000, () => {
