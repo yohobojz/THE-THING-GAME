@@ -16,6 +16,7 @@
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <button id="consumeBtn" onclick="consume()" style="display:none;">Consume Player</button>
   <h2 id="playerNumberDisplay"></h2>
+  <p id="roundDisplay">Round: 1</p>
 
   <h3>Chat</h3>
   <div id="chatBox" style="border:1px solid #ccc; padding:10px; width:300px; height:200px; overflow-y:scroll;"></div>
@@ -191,6 +192,10 @@ socket.on('youAreNowTheThing', () => {
 
 socket.on('youHaveBeenConsumed', () => {
   alert("💀 You have been consumed by THE THING.");
+});
+socket.on("newRoundStarted", ({ round }) => {
+  document.getElementById("roundDisplay").innerText = "Round: " + round;
+  lastAction = null;
 });
   </script>
 </body>
