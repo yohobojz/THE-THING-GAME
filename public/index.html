@@ -25,6 +25,11 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    socket.on('gameStarted', (data) => {
+  document.getElementById('startGameBtn').style.display = 'none';
+  document.getElementById('playerNumberDisplay').innerText =
+    `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}. Your role: ${data.role}`;
+});
     const socket = io();
     let currentLobbyId = null;
     let isHost = false;
