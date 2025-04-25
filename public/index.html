@@ -24,12 +24,16 @@
   <button onclick="sendMessage()">Send</button>
   <br>
   <button id="emergencyBtn" onclick="callMeeting()">Call Emergency Meeting</button>
-    <h3>Room Actions</h3>
-<select id="playerSelect"></select>
-<br>
-<button onclick="chooseHoldUp()">Hold Up</button>
-<button onclick="chooseVisit()">Visit Room</button>
-<p id="lastActionNotice"></p>
+
+  <h3>Room Actions</h3>
+  <select id="playerSelect"></select>
+  <br>
+  <button onclick="chooseHoldUp()">Hold Up</button>
+  <button onclick="chooseVisit()">Visit Room</button>
+  <p id="lastActionNotice"></p>
+
+  <!-- 🆕 New End Turn Button -->
+  <button onclick="endTurn()">End Turn</button>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -37,8 +41,7 @@
     let currentLobbyId = null;
     let isHost = false;
     let myRole = null;
-    let lastAction = null; // "hold" or "visit"
-
+    let lastAction = null;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -62,6 +65,36 @@
     function callMeeting() {
       socket.emit('callEmergencyMeeting');
       document.getElementById('emergencyBtn').disabled = true;
+    }
+
+    function chooseHoldUp() {
+      if (lastAction === "hold") {
+        alert("You can't hold up two rounds in a row!");
+        return;
+      }
+      socket.emit("roomAction", { action: "hold" });
+      lastAction = "hold";
+      document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
+    }
+
+    function chooseVisit() {
+      if (lastAction === "visit") {
+        alert("You can't visit two rounds in a row!");
+        return;
+      }
+      const target = document.getElementById("playerSelect").value;
+      socket.emit("roomAction", { action: "visit", target });
+      lastAction = "visit";
+      document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
+    }
+
+    function consume() {
+      console.log("Attempting to consume a player...");
+      socket.emit("consumePlayer");
+    }
+
+    function endTurn() {
+      socket.emit("endTurn");
     }
 
     socket.on('lobbyCreated', (data) => {
@@ -89,35 +122,54 @@
       });
     });
 
+    socket.on('updatePlayerList', (players) => {
+      const dropdown = document.getElementById("playerSelect");
+      dropdown.innerHTML = "";
+      if (players.length <= 1) {
+        const opt = document.createElement("option");
+        opt.text = "(waiting for other players...)";
+        opt.disabled = true;
+        dropdown.appendChild(opt);
+      }
+      players.forEach(p => {
+        if (p !== socket.id) {
+          const opt = document.createElement("option");
+          opt.value = p;
+          opt.text = p;
+          dropdown.appendChild(opt);
+        }
+      });
+    });
+
     socket.on('gameStarted', (data) => {
-  document.getElementById('startGameBtn').style.display = 'none';
+      document.getElementById('startGameBtn').style.display = 'none';
 
-  const roleDescriptions = {
-    "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
-    "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
-    "Intern": "If you discover the engineer's body, you become the new engineer.",
-    "Comms Expert": "Can send a global message at the start of every even-numbered round.",
-    "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
-    "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
-    "Houndmaster": "Once per game, block visits to your room while holding up.",
-    "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t. Resume turn order as normal afterwards.",
-    "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
-  };
+      const roleDescriptions = {
+        "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
+        "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
+        "Intern": "If you discover the engineer's body, you become the new engineer.",
+        "Comms Expert": "Can send a global message at the start of every even-numbered round.",
+        "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
+        "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
+        "Houndmaster": "Once per game, block visits to your room while holding up.",
+        "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t. Resume turn order as normal afterwards.",
+        "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
+      };
 
-  const role = data.role;
-  const desc = roleDescriptions[role] || "No description available.";
+      const role = data.role;
+      const desc = roleDescriptions[role] || "No description available.";
 
-  document.getElementById('playerNumberDisplay').innerHTML =
-    `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
-     Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
+      document.getElementById('playerNumberDisplay').innerHTML =
+        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
+         Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
 
-  myRole = role;
-  lastAction = null;
+      myRole = role;
+      lastAction = null;
 
-  if (myRole === "THE THING") {
-    document.getElementById('consumeBtn').style.display = 'inline-block';
-  }
-});
+      if (myRole === "THE THING") {
+        document.getElementById('consumeBtn').style.display = 'inline-block';
+      }
+    });
 
     socket.on('receiveMessage', ({ from, text }) => {
       const chatBox = document.getElementById('chatBox');
@@ -138,65 +190,23 @@
       chatBox.appendChild(p);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
-    function chooseHoldUp() {
-  if (lastAction === "hold") {
-    alert("You can't hold up two rounds in a row!");
-    return;
-  }
-  socket.emit("roomAction", { action: "hold" });
-  lastAction = "hold";
-  document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
-}
 
-function chooseVisit() {
-  if (lastAction === "visit") {
-    alert("You can't visit two rounds in a row!");
-    return;
-  }
-  const target = document.getElementById("playerSelect").value;
-  socket.emit("roomAction", { action: "visit", target });
-  lastAction = "visit";
-  document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
-}
+    socket.on('consumeFailed', (msg) => {
+      alert("❌ Failed to consume: " + msg);
+    });
 
-socket.on('updatePlayerList', (players) => {
-  const dropdown = document.getElementById("playerSelect");
-  dropdown.innerHTML = "";
-if (players.length <= 1) {
-  const opt = document.createElement("option");
-  opt.text = "(waiting for other players...)";
-  opt.disabled = true;
-  dropdown.appendChild(opt);
-}
-  players.forEach(p => {
-    if (p !== socket.id) {
-      const opt = document.createElement("option");
-      opt.value = p;
-      opt.text = p;
-      dropdown.appendChild(opt);
-    }
-  });
-});
-  function consume() {
-  console.log("Attempting to consume a player...");
-  socket.emit("consumePlayer");
-}
+    socket.on('youAreNowTheThing', () => {
+      alert("👾 You have consumed a player. You are now them.");
+    });
 
-socket.on('consumeFailed', (msg) => {
-  alert("❌ Failed to consume: " + msg);
-});
+    socket.on('youHaveBeenConsumed', () => {
+      alert("💀 You have been consumed by THE THING.");
+    });
 
-socket.on('youAreNowTheThing', () => {
-  alert("👾 You have consumed a player. You are now them.");
-});
-
-socket.on('youHaveBeenConsumed', () => {
-  alert("💀 You have been consumed by THE THING.");
-});
-socket.on("newRoundStarted", ({ round }) => {
-  document.getElementById("roundDisplay").innerText = "Round: " + round;
-  lastAction = null;
-});
+    socket.on("newRoundStarted", ({ round }) => {
+      document.getElementById("roundDisplay").innerText = "Round: " + round;
+      lastAction = null;
+    });
   </script>
 </body>
 </html>
