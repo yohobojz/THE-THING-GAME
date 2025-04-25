@@ -123,7 +123,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('callEmergencyMeeting', () => {socket.on('consumePlayer', () => {
+  socket.on('callEmergencyMeeting', () => {
+  const data = playerData[socket.id];
+  if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
+
+  data.hasCalledMeeting = true;
+  emergencyMeeting[data.lobbyId] = socket.id;
+
+  io.to(data.lobbyId).emit('emergencyMeetingStarted', {
+    calledBy: socket.id
+  });
+});
+
+// === THE THING: Consume Handler ===
+socket.on('consumePlayer', () => {
   console.log(`[SERVER] Consume attempt from ${socket.id}`);
 
   const me = playerData[socket.id];
