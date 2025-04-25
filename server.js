@@ -188,19 +188,34 @@ io.on('connection', (socket) => {
     );
 
     if (allDone) {
-      roundNumber[lobbyId]++;
-      hasEndedTurn[lobbyId].clear();
+  roundNumber[lobbyId]++;
+  hasEndedTurn[lobbyId].clear();
 
-      io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
+  io.to(lobbyId).emit("newRoundStarted", {
+    round: roundNumber[lobbyId]
+  });
 
-      console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+  console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
 
-      for (const id of lobbies[lobbyId].players) {
-        if (playerData[id]) {
-          playerData[id].messagesThisRound = 0;
-        }
-      }
+  for (const id of lobbies[lobbyId].players) {
+    if (playerData[id]) {
+      playerData[id].messagesThisRound = 0;
+
+      if (playerData[id].role === "Engineer") {
+  playerData[id].roundsSurvived++;
+  console.log(`[DEBUG] Engineer ${id} has now survived ${playerData[id].roundsSurvived} rounds.`);
+
+  if (playerData[id].roundsSurvived >= 3 && !playerData[id].bioscannerBuilt) {
+    playerData[id].bioscannerBuilt = true;
+    io.to(id).emit("bioscannerReady");
+    console.log(`[DEBUG] Engineer ${id} has built their bioscanner!`);
+  }
+}
+
     }
+  }
+}
+
   });
 
   socket.on('consumePlayer', () => {
