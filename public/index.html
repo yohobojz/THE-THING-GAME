@@ -97,7 +97,7 @@ const desc = roleDescriptions[role] || "No description available.";
 
 document.getElementById('playerNumberDisplay').innerHTML =
   `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
-   <strong title="${desc}">Your role: ${role}</strong>`;
+   Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
 
 });
 
