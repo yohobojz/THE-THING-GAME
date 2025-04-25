@@ -3,7 +3,6 @@
 <head>
   <title>Lobby System</title>
   <style>
-    /* 🆕 Tiny polish: highlight dropdown on hover */
     select#playerSelect option:hover {
       font-weight: bold;
       background-color: #f0f0f0;
@@ -18,7 +17,7 @@
   <button onclick="joinLobby()">Join Lobby</button>
 
   <h2 id="status"></h2>
-  <ul id="players"></ul> <!-- ✅ Player display section -->
+  <ul id="players"></ul>
 
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <button id="consumeBtn" onclick="consume()" style="display:none;">Consume Player</button>
@@ -39,7 +38,8 @@
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
 
-  <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
+  <button id="submitMoveBtn" onclick="submitMove()" disabled>Submit Move</button> <!-- 🆕 -->
+  <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button> <!-- 🆕 -->
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -47,6 +47,7 @@
     let currentLobbyId = null;
     let isHost = false;
     let myRole = null;
+    let moveChosen = false;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -75,7 +76,8 @@
     function chooseHoldUp() {
       socket.emit("roomAction", { action: "hold" });
       document.getElementById("lastActionNotice").innerText = "You plan to hold up in your room.";
-      document.getElementById("endTurnBtn").disabled = false;
+      document.getElementById("submitMoveBtn").disabled = false;
+      moveChosen = true;
     }
 
     function chooseVisit() {
@@ -86,17 +88,28 @@
       }
       socket.emit("roomAction", { action: "visit", target });
       document.getElementById("lastActionNotice").innerText = "You plan to visit " + target + "'s room.";
-      document.getElementById("endTurnBtn").disabled = false;
+      document.getElementById("submitMoveBtn").disabled = false;
+      moveChosen = true;
     }
 
-    function consume() {
-      socket.emit("consumePlayer");
+    function submitMove() {
+      if (!moveChosen) {
+        alert("Pick a move before submitting!");
+        return;
+      }
+      document.getElementById("submitMoveBtn").disabled = true;
+      document.getElementById("endTurnBtn").disabled = false;
     }
 
     function endTurn() {
       socket.emit("endTurn");
       document.getElementById("endTurnBtn").disabled = true;
       document.getElementById("lastActionNotice").innerText = "You ended your turn.";
+      moveChosen = false;
+    }
+
+    function consume() {
+      socket.emit("consumePlayer");
     }
 
     socket.on('lobbyCreated', (data) => {
@@ -136,7 +149,7 @@
       }
 
       players.forEach(p => {
-        if (p.id !== socket.id) { // ✅ Correct filtering
+        if (p.id !== socket.id) {
           const opt = document.createElement("option");
           opt.value = p.id;
           opt.text = p.name;
@@ -156,7 +169,7 @@
         "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
         "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
         "Houndmaster": "Once per game, block visits to your room while holding up.",
-        "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t. Resume turn order as normal afterwards.",
+        "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
         "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
       };
 
@@ -168,7 +181,9 @@
          Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
 
       myRole = role;
+      document.getElementById('consumeBtn').style.display = myRole === "THE THING" ? 'inline-block' : 'none';
       document.getElementById('endTurnBtn').disabled = true;
+      document.getElementById('submitMoveBtn').disabled = true;
     });
 
     socket.on('receiveMessage', ({ from, text }) => {
@@ -196,18 +211,19 @@
     });
 
     socket.on('youAreNowTheThing', () => {
-  alert("👾 You have consumed a player. You are now them.");
-  myRole = "THE THING"; // 🛠 Set local role correctly
-  document.getElementById('consumeBtn').style.display = 'inline-block'; // 🛠 Reveal the consume button
-});
+      alert("👾 You have consumed a player. You are now them.");
+      myRole = "THE THING";
+      document.getElementById('consumeBtn').style.display = 'inline-block';
+    });
 
     socket.on('youHaveBeenConsumed', () => {
       alert("💀 You have been consumed by THE THING.");
     });
 
     socket.on('newRoundStarted', ({ round }) => {
-      document.getElementById('roundDisplay').innerText = "Round: " + round;
+      document.getElementById("roundDisplay").innerText = "Round: " + round;
       document.getElementById('endTurnBtn').disabled = true;
+      document.getElementById('submitMoveBtn').disabled = true;
     });
   </script>
 </body>
