@@ -43,6 +43,9 @@
   <button id="submitActionBtn" onclick="submitAction()" disabled>Submit Choice</button>
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
+  <!-- Add Bioscanner Button -->
+  <button id="bioscannerBtn" onclick="useBioscanner()" style="display:none;">Use Bioscanner</button>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -107,6 +110,39 @@
     function consume() {
       socket.emit("consumePlayer");
     }
+
+    // Function to trigger bioscanner action
+    function useBioscanner() {
+      const target = document.getElementById('playerSelect').value;
+      if (!target) {
+        alert("Select a player to scan first!");
+        return;
+      }
+
+      // Emit scan request to server
+      socket.emit('scanPlayer', { target });
+
+      // Disable the bioscanner button after use
+      document.getElementById('bioscannerBtn').disabled = true;
+      document.getElementById('lastActionNotice').innerText = "You used the bioscanner.";
+    }
+
+    // Listen for scan result from the server
+    socket.on('scanResult', (result) => {
+      const message = result.isTheThing
+        ? `${result.playerName} is THE THING!`
+        : `${result.playerName} is not THE THING.`;
+
+      // Display the result in chat
+      const chatBox = document.getElementById('chatBox');
+      const p = document.createElement('p');
+      p.innerText = message;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      // Re-enable the bioscanner button for future use
+      document.getElementById('bioscannerBtn').disabled = false;
+    });
 
     socket.on('lobbyCreated', (data) => {
       currentLobbyId = data.lobbyId;
@@ -177,6 +213,11 @@
       myRole = role;
       if (myRole === "THE THING") {
         document.getElementById('consumeBtn').style.display = 'inline-block';
+      }
+
+      // Show bioscanner button if the Engineer has it unlocked
+      if (myRole === "Engineer" && data.role === "Engineer" && playerData[socket.id]?.bioscannerReady) {
+        document.getElementById('bioscannerBtn').style.display = 'inline-block';
       }
     });
 
