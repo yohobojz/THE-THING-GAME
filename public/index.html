@@ -128,6 +128,39 @@ document.getElementById('playerNumberDisplay').innerHTML =
       chatBox.appendChild(p);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
+    function chooseHoldUp() {
+  if (lastAction === "hold") {
+    alert("You can't hold up two rounds in a row!");
+    return;
+  }
+  socket.emit("roomAction", { action: "hold" });
+  lastAction = "hold";
+  document.getElementById("lastActionNotice").innerText = "You are holding up in your room.";
+}
+
+function chooseVisit() {
+  if (lastAction === "visit") {
+    alert("You can't visit two rounds in a row!");
+    return;
+  }
+  const target = document.getElementById("playerSelect").value;
+  socket.emit("roomAction", { action: "visit", target });
+  lastAction = "visit";
+  document.getElementById("lastActionNotice").innerText = "You are visiting " + target + "'s room.";
+}
+
+socket.on('updatePlayerList', (players) => {
+  const dropdown = document.getElementById("playerSelect");
+  dropdown.innerHTML = "";
+  players.forEach(p => {
+    if (p !== socket.id) {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.text = p;
+      dropdown.appendChild(opt);
+    }
+  });
+});
   </script>
 </body>
 </html>
