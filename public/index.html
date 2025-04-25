@@ -80,8 +80,25 @@
 
     socket.on('gameStarted', (data) => {
   document.getElementById('startGameBtn').style.display = 'none';
-  document.getElementById('playerNumberDisplay').innerText =
-    `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}. Your role: ${data.role}`;
+  const roleDescriptions = {
+  "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
+  "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
+  "Intern": "If you discover the engineer's body, you become the new engineer.",
+  "Comms Expert": "Can send a global message at the start of every even-numbered round.",
+  "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
+  "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
+  "Houndmaster": "Once per game, block visits to your room while holding up.",
+  "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t. Resume turn order as normal afterwards.",
+  "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
+};
+
+const role = data.role;
+const desc = roleDescriptions[role] || "No description available.";
+
+document.getElementById('playerNumberDisplay').innerHTML =
+  `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
+   <strong title="${desc}">Your role: ${role}</strong>`;
+
 });
 
     socket.on('receiveMessage', ({ from, text }) => {
