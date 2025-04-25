@@ -29,12 +29,10 @@ function assignRoles(players) {
   const availableOptionalRoles = optionalRoles.sort(() => Math.random() - 0.5);
   const numberOfOptionalRoles = Math.min(availableOptionalRoles.length, internIds.length);
 
-  const assigned = new Set();
   for (let i = 0; i < numberOfOptionalRoles; i++) {
     const internId = internIds[i];
     if (roles[internId] === "Intern") {
       roles[internId] = availableOptionalRoles[i];
-      assigned.add(availableOptionalRoles[i]);
     }
   }
 
@@ -46,10 +44,14 @@ io.on('connection', (socket) => {
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
+
+    // Register the lobby
     lobbies[lobbyId] = {
       players: [socket.id],
       host: socket.id
     };
+
+    // Register the player
     playerData[socket.id] = {
       lobbyId,
       hasCalledMeeting: false,
@@ -57,6 +59,7 @@ io.on('connection', (socket) => {
       currentRoom: socket.id,
       role: 'unknown'
     };
+
     emergencyMeeting[lobbyId] = null;
 
     socket.join(lobbyId);
@@ -67,6 +70,7 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', (lobbyId) => {
     if (lobbies[lobbyId]) {
       lobbies[lobbyId].players.push(socket.id);
+
       playerData[socket.id] = {
         lobbyId,
         hasCalledMeeting: false,
@@ -74,6 +78,7 @@ io.on('connection', (socket) => {
         currentRoom: socket.id,
         role: 'unknown'
       };
+
       socket.join(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
       io.to(lobbyId).emit('playerListUpdated', lobbies[lobbyId].players);
