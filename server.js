@@ -76,7 +76,8 @@ io.on('connection', (socket) => {
         from: socket.id,
         text: msg
       });
-    } else {
+    } 
+      else {
       const recipients = Object.keys(playerData).filter(
         id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
       );
