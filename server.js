@@ -124,6 +124,42 @@ io.on('connection', (socket) => {
   });
 
   socket.on('callEmergencyMeeting', () => {
+  socket.on('consumePlayer', () => {
+  const me = playerData[socket.id];
+  if (!me || me.role !== "THE THING") return;
+
+  const roomMates = Object.entries(playerData).filter(([id, p]) =>
+    p.lobbyId === me.lobbyId &&
+    p.currentRoom === me.currentRoom &&
+    id !== socket.id &&
+    p.role !== "DEAD"
+  );
+
+  if (roomMates.length !== 1) {
+    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+    return;
+  }
+
+  const [victimId, victimData] = roomMates[0];
+
+  // Transfer THE THING’s role
+  playerData[socket.id].role = "DEAD";
+  playerData[victimId].role = "THE THING";
+  playerData[socket.id].currentRoom = null;
+
+  // Notify both
+  io.to(victimId).emit("youHaveBeenConsumed");
+  io.to(victimId).emit("gameStarted", {
+    playerNumber: "???",
+    totalPlayers: "???",
+    role: "DEAD"
+  });
+
+  io.to(victimId).emit("chatError", "You are dead.");
+
+  io.to(victimId).emit("updatePlayerList", []); // hide dropdown
+  io.to(socket.id).emit("youAreNowTheThing");
+});
     const data = playerData[socket.id];
     if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
 
