@@ -144,37 +144,40 @@ socket.on('roomAction', ({ action, target }) => {
     player.currentRoom = socket.id;
   } else if (action === "visit" && target && playerData[target]) {
     player.currentRoom = target;
-  const lobbyId = player.lobbyId;
-if (!readyPlayers[lobbyId]) readyPlayers[lobbyId] = new Set();
-
-readyPlayers[lobbyId].add(socket.id);
-
-console.log(`[ROUND DEBUG] ${socket.id} acted. Ready count: ${readyPlayers[lobbyId].size}/${lobbies[lobbyId].players.length}`);
-
-const allIn = lobbies[lobbyId].players.every(id =>
-  readyPlayers[lobbyId].has(id) || playerData[id]?.role === "DEAD"
-);
-
-console.log(`[ROUND DEBUG] Checking if all players ready in lobby ${lobbyId}...`);
-
-if (allIn) {
-  roundNumber[lobbyId]++;
-  readyPlayers[lobbyId].clear();
-
-  io.to(lobbyId).emit("newRoundStarted", {
-    round: roundNumber[lobbyId]
-  });
-
-  for (const id of lobbies[lobbyId].players) {
-    if (playerData[id]) {
-      playerData[id].messagesThisRound = 0;
-    }
-  }
-}
-
+  } else {
+    return; // Invalid action — skip
   }
 
   console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
+
+  const lobbyId = player.lobbyId;
+  if (!readyPlayers[lobbyId]) readyPlayers[lobbyId] = new Set();
+
+  readyPlayers[lobbyId].add(socket.id);
+
+  console.log(`[ROUND DEBUG] ${socket.id} acted. Ready count: ${readyPlayers[lobbyId].size}/${lobbies[lobbyId].players.length}`);
+  console.log(`[ROUND DEBUG] Checking if all players ready in lobby ${lobbyId}...`);
+
+  const allIn = lobbies[lobbyId].players.every(id =>
+    readyPlayers[lobbyId].has(id) || playerData[id]?.role === "DEAD"
+  );
+
+  if (allIn) {
+    roundNumber[lobbyId]++;
+    readyPlayers[lobbyId].clear();
+
+    io.to(lobbyId).emit("newRoundStarted", {
+      round: roundNumber[lobbyId]
+    });
+
+    console.log(`[ROUND DEBUG] All players ready. Advancing to round ${roundNumber[lobbyId]}.`);
+
+    for (const id of lobbies[lobbyId].players) {
+      if (playerData[id]) {
+        playerData[id].messagesThisRound = 0;
+      }
+    }
+  }
 });
 
   socket.on('consumePlayer', () => {
