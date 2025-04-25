@@ -133,6 +133,19 @@ io.on('connection', (socket) => {
     });
   });
 
+socket.on('roomAction', ({ action, target }) => {
+  const player = playerData[socket.id];
+  if (!player) return;
+
+  if (action === "hold") {
+    player.currentRoom = socket.id;
+  } else if (action === "visit" && target && playerData[target]) {
+    player.currentRoom = target;
+  }
+
+  console.log(`[SERVER] ${socket.id} moved to room: ${player.currentRoom}`);
+});
+
   socket.on('consumePlayer', () => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
 
