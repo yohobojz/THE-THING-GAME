@@ -11,8 +11,8 @@ app.use(express.static('public'));
 const lobbies = {};
 const playerData = {};
 const emergencyMeeting = {};
-const roundNumber = {}; // { lobbyId: number }
-const hasEndedTurn = {}; // { lobbyId: Set of players who clicked "End Turn" }
+const roundNumber = {};
+const hasEndedTurn = {};
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -49,10 +49,7 @@ io.on('connection', (socket) => {
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    lobbies[lobbyId] = {
-      players: [socket.id],
-      host: socket.id
-    };
+    lobbies[lobbyId] = { players: [socket.id], host: socket.id };
     playerData[socket.id] = {
       lobbyId,
       hasCalledMeeting: false,
@@ -65,10 +62,9 @@ io.on('connection', (socket) => {
 
     socket.join(lobbyId);
     socket.emit('lobbyCreated', { lobbyId, isHost: true });
-    const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || "Unknown");
-    io.to(lobbyId).emit('playerListUpdated', names);
-    io.to(lobbyId).emit('updatePlayerList', names);
 
+    const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
+    io.to(lobbyId).emit('updatePlayerList', playerInfos);
   });
 
   socket.on('joinLobby', (lobbyId) => {
@@ -79,15 +75,14 @@ io.on('connection', (socket) => {
         hasCalledMeeting: false,
         messagesThisRound: 0,
         currentRoom: socket.id,
-        role: '',
+        role: 'unknown',
         lastAction: null
       };
       socket.join(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
-      const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
-    io.to(lobbyId).emit('playerListUpdated', names);
-    io.to(lobbyId).emit('updatePlayerList', names);
 
+      const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
+      io.to(lobbyId).emit('updatePlayerList', playerInfos);
     } else {
       socket.emit('lobbyError', 'Lobby does not exist.');
     }
@@ -112,22 +107,21 @@ io.on('connection', (socket) => {
     data.messagesThisRound++;
 
     if (emergencyMeeting[lobbyId]) {
-  io.to(lobbyId).emit('receiveMessage', {
-    from: playerData[socket.id]?.displayName || "Unknown",
-    text: msg
-  });
-} else {
-  const recipients = Object.keys(playerData).filter(
-    id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
-  );
-  recipients.forEach(id => {
-    io.to(id).emit('receiveMessage', {
-      from: playerData[socket.id]?.displayName || "Unknown",
-      text: msg
-    });
-  });
-}
-
+      io.to(lobbyId).emit('receiveMessage', {
+        from: playerData[socket.id]?.displayName || "Unknown",
+        text: msg
+      });
+    } else {
+      const recipients = Object.keys(playerData).filter(
+        id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
+      );
+      recipients.forEach(id => {
+        io.to(id).emit('receiveMessage', {
+          from: playerData[socket.id]?.displayName || "Unknown",
+          text: msg
+        });
+      });
+    }
   });
 
   socket.on('callEmergencyMeeting', () => {
@@ -143,74 +137,69 @@ io.on('connection', (socket) => {
   });
 
   socket.on('roomAction', ({ action, target }) => {
-  const player = playerData[socket.id];
-  if (!player) return;
+    const player = playerData[socket.id];
+    if (!player) return;
 
-  if (action === "hold") {
-    player.intendedAction = "hold";
-    player.intendedTarget = null;
-  } else if (action === "visit" && target && playerData[target]) {
-    if (target === socket.id) {
-      socket.emit("chatError", "You can't visit yourself!");
+    if (action === "hold") {
+      player.intendedAction = "hold";
+      player.intendedTarget = null;
+    } else if (action === "visit" && target && playerData[target]) {
+      if (target === socket.id) {
+        socket.emit("chatError", "You can't visit yourself!");
+        return;
+      }
+      player.intendedAction = "visit";
+      player.intendedTarget = target;
+    } else {
       return;
     }
-    player.intendedAction = "visit";
-    player.intendedTarget = target;
-  } else {
-    return; // Invalid action
-  }
 
-  console.log(`[SERVER] ${socket.id} chose to ${action}${target ? " " + target : ""} (waiting to end turn)`);
-});
+    console.log(`[SERVER] ${socket.id} chose to ${action}${target ? " " + target : ""} (waiting to end turn)`);
+  });
 
   socket.on("endTurn", () => {
-  const player = playerData[socket.id];
-  if (!player) return;
+    const player = playerData[socket.id];
+    if (!player) return;
 
-  const lobbyId = player.lobbyId;
-  if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
+    const lobbyId = player.lobbyId;
+    if (!hasEndedTurn[lobbyId]) hasEndedTurn[lobbyId] = new Set();
 
-  // Validate if player even chose an action
-  if (!player.intendedAction) {
-    socket.emit("chatError", "You must choose hold or visit before ending your turn!");
-    return;
-  }
+    if (!player.intendedAction) {
+      socket.emit("chatError", "You must choose hold or visit before ending your turn!");
+      return;
+    }
 
-  // Lock in action officially
-  if (player.intendedAction === "hold") {
-    player.currentRoom = socket.id;
-  } else if (player.intendedAction === "visit" && player.intendedTarget) {
-    player.currentRoom = player.intendedTarget;
-  }
+    if (player.intendedAction === "hold") {
+      player.currentRoom = socket.id;
+    } else if (player.intendedAction === "visit" && player.intendedTarget) {
+      player.currentRoom = player.intendedTarget;
+    }
 
-  player.lastAction = player.intendedAction; // Set lastAction here at END TURN
-  player.intendedAction = null; // Clear for next round
-  player.intendedTarget = null; // Clear for next round
+    player.lastAction = player.intendedAction;
+    player.intendedAction = null;
+    player.intendedTarget = null;
 
-  hasEndedTurn[lobbyId].add(socket.id);
+    hasEndedTurn[lobbyId].add(socket.id);
 
-  const allDone = lobbies[lobbyId].players.every(id =>
-    hasEndedTurn[lobbyId].has(id) || playerData[id]?.role === "DEAD"
-  );
+    const allDone = lobbies[lobbyId].players.every(id =>
+      hasEndedTurn[lobbyId].has(id) || playerData[id]?.role === "DEAD"
+    );
 
-  if (allDone) {
-    roundNumber[lobbyId]++;
-    hasEndedTurn[lobbyId].clear();
+    if (allDone) {
+      roundNumber[lobbyId]++;
+      hasEndedTurn[lobbyId].clear();
 
-    io.to(lobbyId).emit("newRoundStarted", {
-      round: roundNumber[lobbyId]
-    });
+      io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
 
-    console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
+      console.log(`[ROUND DEBUG] All players ended turn. Advancing to round ${roundNumber[lobbyId]}.`);
 
-    for (const id of lobbies[lobbyId].players) {
-      if (playerData[id]) {
-        playerData[id].messagesThisRound = 0;
+      for (const id of lobbies[lobbyId].players) {
+        if (playerData[id]) {
+          playerData[id].messagesThisRound = 0;
+        }
       }
     }
-  }
-});
-
+  });
 
   socket.on('consumePlayer', () => {
     console.log(`[SERVER] Consume attempt from ${socket.id}`);
@@ -272,9 +261,8 @@ io.on('connection', (socket) => {
       lobby.players = lobby.players.filter(id => id !== socket.id);
       delete playerData[socket.id];
 
-     const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || "Unknown");
-     io.to(lobbyId).emit('playerListUpdated', names);
-     io.to(lobbyId).emit('updatePlayerList', names);
+      const playerInfos = lobby.players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
+      io.to(lobbyId).emit('updatePlayerList', playerInfos);
 
       if (lobby.players.length === 0) {
         delete lobbies[lobbyId];
@@ -285,32 +273,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', (lobbyId) => {
-  const lobby = lobbies[lobbyId];
-  roundNumber[lobbyId] = 1;
-  hasEndedTurn[lobbyId] = new Set();
-  if (!lobby) return;
+    const lobby = lobbies[lobbyId];
+    roundNumber[lobbyId] = 1;
+    hasEndedTurn[lobbyId] = new Set();
+    if (!lobby) return;
 
-  const assignedRoles = assignRoles(lobby.players);
+    const assignedRoles = assignRoles(lobby.players);
 
-  lobby.players.forEach((playerId, index) => {
-    if (playerData[playerId]) {
-      playerData[playerId].role = assignedRoles[playerId];
-      playerData[playerId].displayName = "Player " + (index + 1);
-    }
+    lobby.players.forEach((playerId, index) => {
+      if (playerData[playerId]) {
+        playerData[playerId].role = assignedRoles[playerId];
+        playerData[playerId].displayName = "Player " + (index + 1);
+      }
 
-    io.to(playerId).emit('gameStarted', {
-      playerNumber: index + 1,
-      totalPlayers: lobby.players.length,
-      role: assignedRoles[playerId]
+      io.to(playerId).emit('gameStarted', {
+        playerNumber: index + 1,
+        totalPlayers: lobby.players.length,
+        role: assignedRoles[playerId]
+      });
     });
-  });
 
-  // 🆕 After setting names, re-emit updated player list
-  const names = lobby.players.map(id => playerData[id]?.displayName || "Unknown");
-  io.to(lobbyId).emit('playerListUpdated', names);
-  io.to(lobbyId).emit('updatePlayerList', names);
-
-
+    const playerInfos = lobby.players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
+    io.to(lobbyId).emit('updatePlayerList', playerInfos);
   });
 });
 
