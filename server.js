@@ -8,9 +8,9 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-const lobbies = {}; // { lobbyId: { players: [], host: socket.id } }
-const playerData = {}; // { socketId: { lobbyId, hasCalledMeeting, messagesThisRound, currentRoom, role } }
-const emergencyMeeting = {}; // { lobbyId: socketId or null }
+const lobbies = {};
+const playerData = {};
+const emergencyMeeting = {};
 
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -27,7 +27,6 @@ function assignRoles(players) {
   const internIds = shuffled.slice(2);
   const playerCount = players.length;
 
-  // Set guaranteed Intern count based on total player count
   let guaranteedInternCount = 0;
   if (playerCount >= 8) guaranteedInternCount = 2;
   else if (playerCount >= 6) guaranteedInternCount = 1;
@@ -109,8 +108,7 @@ io.on('connection', (socket) => {
         from: socket.id,
         text: msg
       });
-    } 
-      else {
+    } else {
       const recipients = Object.keys(playerData).filter(
         id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom
       );
@@ -124,68 +122,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('callEmergencyMeeting', () => {
-  const data = playerData[socket.id];
-  if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
-
-  data.hasCalledMeeting = true;
-  emergencyMeeting[data.lobbyId] = socket.id;
-
-  io.to(data.lobbyId).emit('emergencyMeetingStarted', {
-    calledBy: socket.id
-  });
-});
-
-// === THE THING: Consume Handler ===
-socket.on('consumePlayer', () => {
-  console.log(`[SERVER] Consume attempt from ${socket.id}`);
-
-  const me = playerData[socket.id];
-  if (!me) {
-    console.log(`[SERVER] No player data found for ${socket.id}`);
-    return;
-  }
-
-  if (me.role !== "THE THING") {
-    console.log(`[SERVER] ${socket.id} is not THE THING (they are ${me.role})`);
-    return;
-  }
-
-  console.log(`[SERVER] ${socket.id} is in room: ${me.currentRoom}`);
-
-  const roomMates = Object.entries(playerData).filter(([id, p]) =>
-    p.lobbyId === me.lobbyId &&
-    p.currentRoom === me.currentRoom &&
-    id !== socket.id &&
-    p.role !== "DEAD"
-  );
-
-  console.log(`[SERVER] Found ${roomMates.length} roommates:`, roomMates.map(([id]) => id));
-
-  if (roomMates.length !== 1) {
-    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-    return;
-  }
-
-  const [victimId, victimData] = roomMates[0];
-
-  // Transfer THE THING’s role
-  playerData[socket.id].role = "DEAD";
-  playerData[victimId].role = "THE THING";
-  playerData[socket.id].currentRoom = null;
-
-  // Notify both players
-  io.to(victimId).emit("youHaveBeenConsumed");
-  io.to(victimId).emit("gameStarted", {
-    playerNumber: "???",
-    totalPlayers: "???",
-    role: "DEAD"
-  });
-
-  io.to(socket.id).emit("youAreNowTheThing");
-
-  console.log(`[SERVER] ${socket.id} successfully consumed ${victimId}`);
-});
-
     const data = playerData[socket.id];
     if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
 
@@ -195,6 +131,54 @@ socket.on('consumePlayer', () => {
     io.to(data.lobbyId).emit('emergencyMeetingStarted', {
       calledBy: socket.id
     });
+  });
+
+  socket.on('consumePlayer', () => {
+    console.log(`[SERVER] Consume attempt from ${socket.id}`);
+
+    const me = playerData[socket.id];
+    if (!me) {
+      console.log(`[SERVER] No player data found for ${socket.id}`);
+      return;
+    }
+
+    if (me.role !== "THE THING") {
+      console.log(`[SERVER] ${socket.id} is not THE THING (they are ${me.role})`);
+      return;
+    }
+
+    console.log(`[SERVER] ${socket.id} is in room: ${me.currentRoom}`);
+
+    const roomMates = Object.entries(playerData).filter(([id, p]) =>
+      p.lobbyId === me.lobbyId &&
+      p.currentRoom === me.currentRoom &&
+      id !== socket.id &&
+      p.role !== "DEAD"
+    );
+
+    console.log(`[SERVER] Found ${roomMates.length} roommates:`, roomMates.map(([id]) => id));
+
+    if (roomMates.length !== 1) {
+      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+      return;
+    }
+
+    const [victimId] = roomMates[0];
+
+    playerData[socket.id].role = "DEAD";
+    playerData[victimId].role = "THE THING";
+    playerData[socket.id].currentRoom = null;
+
+    io.to(victimId).emit("youHaveBeenConsumed");
+    io.to(victimId).emit("gameStarted", {
+      playerNumber: "???",
+      totalPlayers: "???",
+      role: "DEAD"
+    });
+
+    io.to(socket.id).emit("youAreNowTheThing");
+
+    console.log(`[SERVER] ${socket.id} successfully consumed ${victimId}`);
   });
 
   socket.on('disconnect', () => {
@@ -214,20 +198,21 @@ socket.on('consumePlayer', () => {
   });
 
   socket.on('startGame', (lobbyId) => {
-  const lobby = lobbies[lobbyId];
-  if (!lobby) return;
+    const lobby = lobbies[lobbyId];
+    if (!lobby) return;
 
-  const assignedRoles = assignRoles(lobby.players);
+    const assignedRoles = assignRoles(lobby.players);
 
-  lobby.players.forEach((playerId, index) => {
-    if (playerData[playerId]) {
-      playerData[playerId].role = assignedRoles[playerId];
-    }
+    lobby.players.forEach((playerId, index) => {
+      if (playerData[playerId]) {
+        playerData[playerId].role = assignedRoles[playerId];
+      }
 
-    io.to(playerId).emit('gameStarted', {
-      playerNumber: index + 1,
-      totalPlayers: lobby.players.length,
-      role: assignedRoles[playerId]
+      io.to(playerId).emit('gameStarted', {
+        playerNumber: index + 1,
+        totalPlayers: lobby.players.length,
+        role: assignedRoles[playerId]
+      });
     });
   });
 });
