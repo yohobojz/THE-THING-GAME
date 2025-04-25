@@ -177,6 +177,7 @@ if (players.length <= 1) {
   });
 });
   function consume() {
+  console.log("Attempting to consume a player...");
   socket.emit("consumePlayer");
 }
 
