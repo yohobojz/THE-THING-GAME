@@ -267,25 +267,32 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', (lobbyId) => {
-    const lobby = lobbies[lobbyId];
-    roundNumber[lobbyId] = 1;
-    hasEndedTurn[lobbyId] = new Set();
-    if (!lobby) return;
+  const lobby = lobbies[lobbyId];
+  roundNumber[lobbyId] = 1;
+  hasEndedTurn[lobbyId] = new Set();
+  if (!lobby) return;
 
-    const assignedRoles = assignRoles(lobby.players);
+  const assignedRoles = assignRoles(lobby.players);
 
-    lobby.players.forEach((playerId, index) => {
-  if (playerData[playerId]) {
-    playerData[playerId].role = assignedRoles[playerId];
-    playerData[playerId].displayName = "Player " + (index + 1); // 🆕 Assign display name
-  }
+  lobby.players.forEach((playerId, index) => {
+    if (playerData[playerId]) {
+      playerData[playerId].role = assignedRoles[playerId];
+      playerData[playerId].displayName = "Player " + (index + 1);
+    }
 
-  io.to(playerId).emit('gameStarted', {
-    playerNumber: index + 1,
-    totalPlayers: lobby.players.length,
-    role: assignedRoles[playerId]
+    io.to(playerId).emit('gameStarted', {
+      playerNumber: index + 1,
+      totalPlayers: lobby.players.length,
+      role: assignedRoles[playerId]
+    });
   });
+
+  // 🆕 After setting names, re-emit updated player list
+  const names = lobby.players.map(id => playerData[id]?.displayName || "Unknown");
+  io.to(lobbyId).emit('playerListUpdated', names);
+  io.to(lobbyId).emit('updatePlayerList', names);
 });
+
 
   });
 });
