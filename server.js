@@ -12,8 +12,59 @@ const lobbies = {}; // { lobbyId: { players: [], host: socket.id } }
 const playerData = {}; // { socketId: { lobbyId, hasCalledMeeting, messagesThisRound, currentRoom, role } }
 const emergencyMeeting = {}; // { lobbyId: socketId or null }
 
+function assignRoles(players) {
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  const roles = {};
+
+  roles[shuffled[0]] = "THE THING";
+  roles[shuffled[1]] = "Engineer";
+
+  // Default everyone else to Intern
+  for (let i = 2; i < shuffled.length; i++) {
+    roles[shuffled[i]] = "Intern";
+  }
+
+  // Pool of optional roles
+  const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
+  const internIds = shuffled.slice(2);
+
+  const availableOptionalRoles = optionalRoles.sort(() => Math.random() - 0.5);
+  const numberOfOptionalRoles = Math.min(availableOptionalRoles.length, internIds.length);
+
+  const assigned = new Set();
+  for (let i = 0; i < numberOfOptionalRoles; i++) {
+    const internId = internIds[i];
+    if (roles[internId] === "Intern") {
+      roles[internId] = availableOptionalRoles[i];
+      assigned.add(availableOptionalRoles[i]);
+    }
+  }
+
+  return roles;
+}
+
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
+
+  socket.on('startGame', (lobbyId) => {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+
+  const players = lobby.players;
+  const assignedRoles = assignRoles(players);
+
+  players.forEach((playerId, index) => {
+    if (playerData[playerId]) {
+      playerData[playerId].role = assignedRoles[playerId];
+    }
+
+    io.to(playerId).emit('gameStarted', {
+      playerNumber: index + 1,
+      totalPlayers: players.length,
+      role: assignedRoles[playerId]
+    });
+  });
+});
 
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
