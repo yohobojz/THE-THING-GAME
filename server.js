@@ -12,6 +12,31 @@ const lobbies = {}; // { lobbyId: { players: [], host: socket.id } }
 const playerData = {}; // { socketId: { lobbyId, hasCalledMeeting, messagesThisRound, currentRoom, role } }
 const emergencyMeeting = {}; // { lobbyId: socketId or null }
 
+function assignRoles(players) {
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  const roles = {};
+
+  roles[shuffled[0]] = "THE THING";
+  roles[shuffled[1]] = "Engineer";
+
+  for (let i = 2; i < shuffled.length; i++) {
+    roles[shuffled[i]] = "Intern";
+  }
+
+  const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
+  const internIds = shuffled.slice(2);
+  const pool = optionalRoles.sort(() => Math.random() - 0.5);
+
+  const count = Math.min(pool.length, internIds.length);
+  for (let i = 0; i < count; i++) {
+    if (roles[internIds[i]] === "Intern") {
+      roles[internIds[i]] = pool[i];
+    }
+  }
+
+  return roles;
+}
+
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
