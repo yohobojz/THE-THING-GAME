@@ -1,4 +1,3 @@
-// Updated SERVER.JS!
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -27,6 +26,7 @@ function assignRoles(players) {
 
   const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
   const internIds = shuffled.slice(2);
+
   let guaranteedInternCount = 0;
   if (players.length >= 8) guaranteedInternCount = 2;
   else if (players.length >= 6) guaranteedInternCount = 1;
@@ -35,17 +35,11 @@ function assignRoles(players) {
   const shuffledOptional = optionalRoles.sort(() => Math.random() - 0.5);
 
   for (let i = 0; i < assignableCount && i < shuffledOptional.length; i++) {
-    roles[internIds[i]] = shuffledOptional[i];
+    const playerId = internIds[i];
+    roles[playerId] = shuffledOptional[i];
   }
 
   return roles;
-}
-
-function emitPlayerLists(lobbyId) {
-  const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
-  const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
-  io.to(lobbyId).emit('playerListUpdated', names);
-  io.to(lobbyId).emit('updatePlayerList', playerInfos);
 }
 
 io.on('connection', (socket) => {
@@ -54,7 +48,7 @@ io.on('connection', (socket) => {
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
     lobbies[lobbyId] = { players: [socket.id], host: socket.id };
-    playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
+    playerData[socket.id] = { lobbyId, role: 'unknown', displayName: '', messagesThisRound: 0, currentRoom: socket.id, lastAction: null, intendedAction: null, intendedTarget: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
     emergencyMeeting[lobbyId] = null;
     socket.join(lobbyId);
     emitPlayerLists(lobbyId);
@@ -64,7 +58,7 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', (lobbyId) => {
     if (lobbies[lobbyId]) {
       lobbies[lobbyId].players.push(socket.id);
-      playerData[socket.id] = { lobbyId, hasCalledMeeting: false, messagesThisRound: 0, currentRoom: socket.id, role: 'unknown', lastAction: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
+      playerData[socket.id] = { lobbyId, role: 'unknown', displayName: '', messagesThisRound: 0, currentRoom: socket.id, lastAction: null, intendedAction: null, intendedTarget: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
       socket.join(lobbyId);
       emitPlayerLists(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
@@ -95,28 +89,20 @@ io.on('connection', (socket) => {
       io.to(lobbyId).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
     } else {
       const recipients = Object.keys(playerData).filter(id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom);
-      recipients.forEach(id => io.to(id).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg }));
+      recipients.forEach(id => {
+        io.to(id).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
+      });
     }
   });
 
-  socket.on('startGame', (lobbyId) => {
-    if (!lobbies[lobbyId]) return;
+  socket.on('callEmergencyMeeting', () => {
+    const data = playerData[socket.id];
+    if (!data || data.hasCalledMeeting || emergencyMeeting[data.lobbyId]) return;
 
-    roundNumber[lobbyId] = 1;
+    data.hasCalledMeeting = true;
+    emergencyMeeting[data.lobbyId] = socket.id;
 
-    const assignedRoles = assignRoles(lobbies[lobbyId].players);
-
-    lobbies[lobbyId].players.forEach((id, index) => {
-      playerData[id].role = assignedRoles[id];
-      playerData[id].displayName = `Player ${index + 1}`;
-      playerData[id].messagesThisRound = 0;
-      playerData[id].endedTurn = false;
-      playerData[id].roundsSurvived = 0;
-      playerData[id].bioscannerReady = false;
-      io.to(id).emit('gameStarted', { playerNumber: index + 1, totalPlayers: lobbies[lobbyId].players.length, role: assignedRoles[id] });
-    });
-
-    emitPlayerLists(lobbyId);
+    io.to(data.lobbyId).emit('emergencyMeetingStarted', { calledBy: socket.id });
   });
 
   socket.on('roomAction', ({ action, target }) => {
@@ -136,8 +122,6 @@ io.on('connection', (socket) => {
     } else {
       return;
     }
-
-    console.log(`[SERVER] ${socket.id} plans to ${action} ${target || ''}`);
   });
 
   socket.on('submitAction', () => {
@@ -163,6 +147,7 @@ io.on('connection', (socket) => {
     player.lastAction = player.intendedAction;
     player.intendedAction = null;
     player.intendedTarget = null;
+
     player.endedTurn = false;
   });
 
@@ -170,26 +155,32 @@ io.on('connection', (socket) => {
     const player = playerData[socket.id];
     if (!player) return;
 
+    if (player.endedTurn) return;
+
     player.endedTurn = true;
 
     const lobbyId = player.lobbyId;
 
-    lobbies[lobbyId].players.forEach(id => {
-      if (playerData[id]?.role === 'Engineer' && !playerData[id]?.endedTurn) {
-        playerData[id].roundsSurvived++;
+    const allDone = lobbies[lobbyId].players.every(id => playerData[id]?.endedTurn || playerData[id]?.role === "DEAD");
 
-        if (playerData[id].roundsSurvived >= 3 && !playerData[id].bioscannerReady) {
-          playerData[id].bioscannerReady = true;
-          io.to(id).emit('bioscannerReady');
+    if (allDone) {
+      roundNumber[lobbyId]++;
+
+      io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
+
+      for (const id of lobbies[lobbyId].players) {
+        if (playerData[id]) {
+          playerData[id].messagesThisRound = 0;
+          playerData[id].endedTurn = false;
+          if (playerData[id].role === 'Engineer' && !playerData[id].bioscannerReady) {
+            playerData[id].roundsSurvived++;
+            if (playerData[id].roundsSurvived >= 3) {
+              playerData[id].bioscannerReady = true;
+              io.to(id).emit('bioscannerReady');
+            }
+          }
         }
       }
-    });
-
-    if (lobbies[lobbyId].players.every(id => playerData[id]?.endedTurn || playerData[id]?.role === "DEAD")) {
-      roundNumber[lobbyId]++;
-      lobbies[lobbyId].players.forEach(id => playerData[id].messagesThisRound = 0);
-      lobbies[lobbyId].players.forEach(id => playerData[id].endedTurn = false);
-      io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
     }
   });
 
@@ -197,18 +188,22 @@ io.on('connection', (socket) => {
     const me = playerData[socket.id];
     if (!me) return;
 
+    if (me.role !== "THE THING" || me.endedTurn) {
+      socket.emit("consumeFailed", "Can't consume!");
+      return;
+    }
+
     const lobbyId = me.lobbyId;
-    if (roundNumber[lobbyId] === 1) return socket.emit("consumeFailed", "Can't consume on Round 1.");
-
-    if (me.role !== "THE THING") return socket.emit("consumeFailed", "You're not THE THING!");
-
-    if (me.endedTurn) return socket.emit("consumeFailed", "You already ended your turn!");
 
     const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
-    if (roomMates.length !== 1) return socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+    if (roomMates.length !== 1) {
+      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+      return;
+    }
 
     const [victimId] = roomMates[0];
+
     playerData[socket.id].role = "DEAD";
     playerData[victimId].role = "THE THING";
     playerData[socket.id].currentRoom = null;
@@ -216,26 +211,37 @@ io.on('connection', (socket) => {
     io.to(victimId).emit("youHaveBeenConsumed");
     io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
     io.to(socket.id).emit("youAreNowTheThing");
-
-    console.log(`[SERVER] ${socket.id} consumed ${victimId}`);
   });
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
     const targetPlayer = playerData[target];
-    if (!player || !targetPlayer) return;
 
-    if (player.role !== 'Engineer') return;
-    if (!player.bioscannerReady) return socket.emit('chatError', 'Bioscanner not unlocked yet!');
-
-    if (player.currentRoom !== targetPlayer.currentRoom) {
-      socket.emit('chatError', 'You can only scan players in the same room!');
-      return;
-    }
+    if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
 
     const isTheThing = targetPlayer.role === 'THE THING';
 
     socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
+  });
+
+  socket.on('startGame', (lobbyId) => {
+    if (!lobbies[lobbyId]) return;
+
+    roundNumber[lobbyId] = 1;
+
+    const assignedRoles = assignRoles(lobbies[lobbyId].players);
+
+    lobbies[lobbyId].players.forEach((id, index) => {
+      playerData[id].role = assignedRoles[id];
+      playerData[id].displayName = `Player ${index + 1}`;
+      playerData[id].messagesThisRound = 0;
+      playerData[id].endedTurn = false;
+      playerData[id].roundsSurvived = 0;
+      playerData[id].bioscannerReady = false;
+      io.to(id).emit('gameStarted', { playerNumber: index + 1, totalPlayers: lobbies[lobbyId].players.length, role: assignedRoles[id] });
+    });
+
+    emitPlayerLists(lobbyId);
   });
 
   socket.on('disconnect', () => {
@@ -253,6 +259,13 @@ io.on('connection', (socket) => {
     console.log('A user disconnected:', socket.id);
   });
 });
+
+function emitPlayerLists(lobbyId) {
+  const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
+  const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
+  io.to(lobbyId).emit('playerListUpdated', names);
+  io.to(lobbyId).emit('updatePlayerList', playerInfos);
+}
 
 server.listen(3000, () => {
   console.log('Server running on http://localhost:3000');
