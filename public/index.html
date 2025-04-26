@@ -21,7 +21,6 @@
 
   <button id="startGameBtn" onclick="startGame()" style="display:none;">Start Game</button>
   <button id="consumeBtn" onclick="consume()" style="display:none;">Consume Player</button>
-  <button id="bioscannerBtn" onclick="useBioscanner()" style="display:none;">Use Bioscanner</button>
 
   <h2 id="playerNumberDisplay"></h2>
   <p id="roundDisplay">Round: 1</p>
@@ -44,13 +43,14 @@
   <button id="submitActionBtn" onclick="submitAction()" disabled>Submit Choice</button>
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
+  <button id="bioscannerBtn" onclick="useBioscanner()" style="display:none;">Use Bioscanner</button>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
     let currentLobbyId = null;
     let isHost = false;
     let myRole = null;
-    let bioscannerUnlocked = false;
 
     function createLobby() {
       socket.emit('createLobby');
@@ -89,8 +89,7 @@
         return;
       }
       socket.emit('roomAction', { action: "visit", target });
-      const selectedOption = document.querySelector(`#playerSelect option[value="${target}"]`);
-      document.getElementById('lastActionNotice').innerText = `You plan to visit ${selectedOption ? selectedOption.text : "Unknown"}'s room.`;
+      document.getElementById('lastActionNotice').innerText = "You plan to visit " + target + "'s room.";
       document.getElementById('submitActionBtn').disabled = false;
     }
 
@@ -108,7 +107,7 @@
     }
 
     function consume() {
-      socket.emit("consumePlayer");
+      socket.emit('consumePlayer');
     }
 
     function useBioscanner() {
@@ -118,8 +117,28 @@
         return;
       }
       socket.emit('scanPlayer', { target });
+      document.getElementById('bioscannerBtn').disabled = true;
       document.getElementById('lastActionNotice').innerText = "You used the bioscanner.";
     }
+
+    socket.on('scanResult', (result) => {
+      const message = result.isTheThing
+        ? `${result.playerName} is THE THING!`
+        : `${result.playerName} is not THE THING.`;
+
+      const chatBox = document.getElementById('chatBox');
+      const p = document.createElement('p');
+      p.innerText = message;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      document.getElementById('bioscannerBtn').disabled = false;
+    });
+
+    socket.on('bioscannerUnlocked', () => {
+      console.log("[CLIENT] Bioscanner unlocked!");
+      document.getElementById('bioscannerBtn').style.display = 'inline-block';
+    });
 
     socket.on('lobbyCreated', (data) => {
       currentLobbyId = data.lobbyId;
@@ -149,14 +168,12 @@
     socket.on('updatePlayerList', (players) => {
       const dropdown = document.getElementById('playerSelect');
       dropdown.innerHTML = "";
-
       if (players.length <= 1) {
         const opt = document.createElement('option');
         opt.text = "(waiting for other players...)";
         opt.disabled = true;
         dropdown.appendChild(opt);
       }
-
       players.forEach(p => {
         if (p.id !== socket.id) {
           const opt = document.createElement('option');
@@ -170,55 +187,24 @@
     socket.on('gameStarted', (data) => {
       document.getElementById('startGameBtn').style.display = 'none';
 
-      const roleDescriptions = {
-        "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
-        "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
-        "Intern": "If you discover the engineer's body, you become the new engineer.",
-        "Comms Expert": "Can send a global message at the start of every even-numbered round.",
-        "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
-        "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
-        "Houndmaster": "Once per game, block visits to your room while holding up.",
-        "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
-        "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
-      };
-
-      const role = data.role;
-      const desc = roleDescriptions[role] || "No description available.";
-
-      document.getElementById('playerNumberDisplay').innerHTML =
-        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
-         Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${role}</span>`;
-
-      myRole = role;
+      myRole = data.role;
       if (myRole === "THE THING") {
         document.getElementById('consumeBtn').style.display = 'inline-block';
       }
+
+      document.getElementById('playerNumberDisplay').innerHTML =
+        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
+         Your role: <span style="text-decoration: underline dotted; cursor: help;">${myRole}</span>`;
+
+      document.getElementById('roundDisplay').innerText = "Round: 1";
+
+      document.getElementById('bioscannerBtn').style.display = 'none'; // reset scanner visibility
     });
 
     socket.on('receiveMessage', ({ from, text }) => {
       const chatBox = document.getElementById('chatBox');
       const p = document.createElement('p');
       p.innerText = `${from}: ${text}`;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    });
-
-    socket.on('bioscannerUnlocked', () => {
-      bioscannerUnlocked = true;
-      if (myRole === "Engineer") {
-        document.getElementById('bioscannerBtn').style.display = 'inline-block';
-        alert("🔬 Your bioscanner is ready! You can now scan players in your room.");
-      }
-    });
-
-    socket.on('scanResult', (result) => {
-      const message = result.isTheThing
-        ? `${result.playerName} is THE THING!`
-        : `${result.playerName} is not THE THING.`;
-
-      const chatBox = document.getElementById('chatBox');
-      const p = document.createElement('p');
-      p.innerText = message;
       chatBox.appendChild(p);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
@@ -240,7 +226,7 @@
     });
 
     socket.on('youAreNowTheThing', () => {
-      alert("👾 You have consumed a player. You are now THE THING.");
+      alert("👾 You have consumed a player. You are now them.");
       myRole = "THE THING";
       document.getElementById('consumeBtn').style.display = 'inline-block';
     });
