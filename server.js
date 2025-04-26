@@ -48,7 +48,19 @@ io.on('connection', (socket) => {
   socket.on('createLobby', () => {
     const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
     lobbies[lobbyId] = { players: [socket.id], host: socket.id };
-    playerData[socket.id] = { lobbyId, role: 'unknown', displayName: '', messagesThisRound: 0, currentRoom: socket.id, lastAction: null, intendedAction: null, intendedTarget: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
+    playerData[socket.id] = {
+      lobbyId,
+      role: 'unknown',
+      displayName: '',
+      messagesThisRound: 0,
+      currentRoom: socket.id,
+      lastAction: null,
+      intendedAction: null,
+      intendedTarget: null,
+      endedTurn: false,
+      roundsSurvived: 0,
+      bioscannerReady: false
+    };
     emergencyMeeting[lobbyId] = null;
     socket.join(lobbyId);
     emitPlayerLists(lobbyId);
@@ -58,7 +70,19 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', (lobbyId) => {
     if (lobbies[lobbyId]) {
       lobbies[lobbyId].players.push(socket.id);
-      playerData[socket.id] = { lobbyId, role: 'unknown', displayName: '', messagesThisRound: 0, currentRoom: socket.id, lastAction: null, intendedAction: null, intendedTarget: null, endedTurn: false, roundsSurvived: 0, bioscannerReady: false };
+      playerData[socket.id] = {
+        lobbyId,
+        role: 'unknown',
+        displayName: '',
+        messagesThisRound: 0,
+        currentRoom: socket.id,
+        lastAction: null,
+        intendedAction: null,
+        intendedTarget: null,
+        endedTurn: false,
+        roundsSurvived: 0,
+        bioscannerReady: false
+      };
       socket.join(lobbyId);
       emitPlayerLists(lobbyId);
       socket.emit('lobbyJoined', { lobbyId, isHost: false });
@@ -147,8 +171,6 @@ io.on('connection', (socket) => {
     player.lastAction = player.intendedAction;
     player.intendedAction = null;
     player.intendedTarget = null;
-
-    player.endedTurn = false;
   });
 
   socket.on('endTurn', () => {
@@ -169,14 +191,18 @@ io.on('connection', (socket) => {
       io.to(lobbyId).emit("newRoundStarted", { round: roundNumber[lobbyId] });
 
       for (const id of lobbies[lobbyId].players) {
-        if (playerData[id]) {
-          playerData[id].messagesThisRound = 0;
-          playerData[id].endedTurn = false;
-          if (playerData[id].role === 'Engineer' && !playerData[id].bioscannerReady) {
-            playerData[id].roundsSurvived++;
-            if (playerData[id].roundsSurvived >= 3) {
-              playerData[id].bioscannerReady = true;
-              io.to(id).emit('bioscannerReady');
+        const p = playerData[id];
+        if (p) {
+          p.messagesThisRound = 0;
+          p.endedTurn = false;
+
+          // 🧪 New bioscanner survival tracking
+          if (p.role === "Engineer" && !p.bioscannerReady) {
+            p.roundsSurvived = (p.roundsSurvived || 0) + 1;
+            if (p.roundsSurvived >= 3) {
+              p.bioscannerReady = true;
+              io.to(id).emit("bioscannerUnlocked");
+              console.log(`[DEBUG] ${p.displayName} has unlocked the bioscanner!`);
             }
           }
         }
