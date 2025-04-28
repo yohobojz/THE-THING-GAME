@@ -24,7 +24,7 @@ function assignRoles(players) {
     roles[shuffled[i]] = "Intern";
   }
 
-  const optionalRoles = ["Comms Expert", "Soldier", "Vlogger", "Houndmaster", "Night Owl", "Defense Expert"];
+  const optionalRoles = ["Comms Expert", "Soldier", "Houndmaster", "Night Owl", "Defense Expert", "Tracker", "Security Expert"];
   const internIds = shuffled.slice(2);
 
   let guaranteedInternCount = 0;
@@ -162,23 +162,23 @@ io.on('connection', (socket) => {
       return;
     }
 
- // Tracker logic: If the player is a Tracker, store the last visited room of the target player
-  if (player.role === 'Tracker' && player.intendedAction === 'visit' && player.intendedTarget) {
-    const target = playerData[player.intendedTarget];
-    if (target) {
-      // Track the last visited room of the target
-      player.lastVisitedRoom = target.currentRoom;  // Store the last visited room
-      console.log(`[DEBUG] Tracker learned that ${target.displayName} last visited ${target.currentRoom}`);
+    // Tracker logic: If the player is a Tracker, store the last visited room of the target player
+    if (player.role === 'Tracker' && player.intendedAction === 'visit' && player.intendedTarget) {
+      const target = playerData[player.intendedTarget];
+      if (target) {
+        // Track the last visited room of the target
+        player.lastVisitedRoom = target.currentRoom;  // Store the last visited room
+        console.log(`[DEBUG] Tracker learned that ${target.displayName} last visited ${target.currentRoom}`);
+      }
     }
-  }
 
-  // Security Expert logic: If the player is a Security Expert, inform them of a visitor
-  if (player.role === 'Security Expert' && player.intendedAction === 'visit') {
-    const target = playerData[player.intendedTarget];
-    if (target && target.currentRoom !== socket.id) {
-      io.to(socket.id).emit('chatMessage', { from: 'System', text: 'Someone visited your room.' });
+    // Security Expert logic: If the player is a Security Expert, inform them of a visitor
+    if (player.role === 'Security Expert' && player.intendedAction === 'visit') {
+      const target = playerData[player.intendedTarget];
+      if (target && target.currentRoom !== socket.id) {
+        io.to(socket.id).emit('chatMessage', { from: 'System', text: 'Someone visited your room.' });
+      }
     }
-  }
 
     if (player.intendedAction === "hold") {
       player.currentRoom = socket.id;
@@ -228,34 +228,33 @@ io.on('connection', (socket) => {
 
       // Check if it's an even-numbered round (Comms Expert should send a message)
       if (roundNumber[lobbyId] % 2 === 0) {
-  // Find all Comms Experts in the lobby
-  const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
+        // Find all Comms Experts in the lobby
+        const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
 
-  if (commsExpert) {
-    const commsExpertName = commsExpert[1].displayName;
+        if (commsExpert) {
+          const commsExpertName = commsExpert[1].displayName;
 
-    // Send message to Comms Expert to show popup
-    io.to(commsExpert[0]).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
+          // Send message to Comms Expert to show popup
+          io.to(commsExpert[0]).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
 
-    // The message will be displayed anonymously to everyone
-    const globalMessage = "A global message from the Comms Expert!";
-    io.to(lobbyId).emit('receiveMessage', { from: 'System', text: globalMessage });  // Broadcast the message to the lobby
-  }
-}
+          // The message will be displayed anonymously to everyone
+          const globalMessage = "A global message from the Comms Expert!";
+          io.to(lobbyId).emit('receiveMessage', { from: 'System', text: globalMessage });  // Broadcast the message to the lobby
+        }
+      }
     }
   });
 
-  // Handle Comms Expert sending their global message
   socket.on('sendCommsMessage', ({ text }) => {
-  const lobbyId = playerData[socket.id].lobbyId;
+    const lobbyId = playerData[socket.id].lobbyId;
 
-  // Send the global message to the entire lobby (anonymously)
-  io.to(lobbyId).emit('receiveMessage', { from: 'System', text: text });
+    // Send the global message to the entire lobby (anonymously)
+    io.to(lobbyId).emit('receiveMessage', { from: 'System', text: text });
 
-  // Optionally, hide the popup for the Comms Expert after sending
-  socket.emit('hideCommsPopup');
-});
-  
+    // Optionally, hide the popup for the Comms Expert after sending the message
+    socket.emit('hideCommsPopup');
+  });
+
   socket.on('consumePlayer', () => {
     const me = playerData[socket.id];
     if (!me) return;
@@ -286,28 +285,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('scanPlayer', ({ target }) => {
-  const player = playerData[socket.id];
-  const targetPlayer = playerData[target];
+    const player = playerData[socket.id];
+    const targetPlayer = playerData[target];
 
-  // Check if the player exists, is an Engineer, and has a ready bioscanner
-  if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
+    // Check if the player exists, is an Engineer, and has a ready bioscanner
+    if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
 
-  // Check if the Engineer has ended their turn
-  if (player.endedTurn) {
-    socket.emit('chatError', "You can no longer scan after ending your turn!");
-    return;
-  }
+    // Check if the Engineer has ended their turn
+    if (player.endedTurn) {
+      socket.emit('chatError', "You can no longer scan after ending your turn!");
+      return;
+    }
 
-  // Check if both players are in the same room
-  if (player.currentRoom !== targetPlayer.currentRoom) {
-    socket.emit('chatError', "You can only scan players in the same room!");
-    return;
-  }
+    // Check if both players are in the same room
+    if (player.currentRoom !== targetPlayer.currentRoom) {
+      socket.emit('chatError', "You can only scan players in the same room!");
+      return;
+    }
 
-  // Perform the scan if both players are in the same room and scan conditions are met
-  const isTheThing = targetPlayer.role === 'THE THING';
-  socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
-});
+    // Perform the scan if both players are in the same room and scan conditions are met
+    const isTheThing = targetPlayer.role === 'THE THING';
+    socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
+  });
 
   socket.on('startGame', (lobbyId) => {
     if (!lobbies[lobbyId]) return;
