@@ -300,6 +300,14 @@ function sendCommsMessage() {
 socket.on('hideCommsPopup', () => {
   document.getElementById('commsPopup').style.display = 'none';
 });
+
+// Display notification for Security Expert when someone visits their room
+socket.on('chatMessage', (data) => {
+  if (data.from === 'System' && data.text === 'Someone visited your room.') {
+    alert('Security Alert: Someone visited your room!');
+  }
+});
+
   </script>
 </body>
 </html>
