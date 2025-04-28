@@ -92,32 +92,38 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendMessage', (msg) => {
-    const data = playerData[socket.id];
-    if (!data) return;
+  const data = playerData[socket.id];
+  if (!data) return;
 
-    if (msg.length > 120) {
-      socket.emit('chatError', 'Message too long!');
-      return;
-    }
+  if (msg.length > 120) {
+    socket.emit('chatError', 'Message too long!');
+    return;
+  }
 
-    if (data.messagesThisRound >= 1) {
-      socket.emit('chatError', 'Only 1 message per round!');
-      return;
-    }
+  if (data.messagesThisRound >= 1) {
+    socket.emit('chatError', 'Only 1 message per round!');
+    return;
+  }
 
-    data.messagesThisRound++;
+  data.messagesThisRound++;
 
-    const { lobbyId, currentRoom } = data;
+  const { lobbyId, currentRoom } = data;
 
-    if (emergencyMeeting[lobbyId]) {
-      io.to(lobbyId).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
-    } else {
-      const recipients = Object.keys(playerData).filter(id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom);
-      recipients.forEach(id => {
-        io.to(id).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
-      });
-    }
-  });
+  // Check if the player is THE THING and if they have consumed someone
+  let messageFrom = playerData[socket.id]?.displayName || "Unknown"; // Default name
+  if (data.role === "THE THING" && data.consumedPlayer) {
+    messageFrom = data.consumedPlayer.name;  // Use the consumed player's name
+  }
+
+  if (emergencyMeeting[lobbyId]) {
+    io.to(lobbyId).emit('receiveMessage', { from: messageFrom, text: msg });
+  } else {
+    const recipients = Object.keys(playerData).filter(id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom);
+    recipients.forEach(id => {
+      io.to(id).emit('receiveMessage', { from: messageFrom, text: msg });
+    });
+  }
+});
 
   socket.on('callEmergencyMeeting', () => {
     const data = playerData[socket.id];
@@ -256,33 +262,53 @@ io.on('connection', (socket) => {
   });
 
   socket.on('consumePlayer', () => {
-    const me = playerData[socket.id];
-    if (!me) return;
+  const me = playerData[socket.id];
+  if (!me) return;
 
-    if (me.role !== "THE THING" || me.endedTurn) {
-      socket.emit("consumeFailed", "Can't consume!");
-      return;
-    }
+  if (me.role !== "THE THING" || me.endedTurn) {
+    socket.emit("consumeFailed", "Can't consume!");
+    return;
+  }
 
-    const lobbyId = me.lobbyId;
+  const lobbyId = me.lobbyId;
 
-    const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
+  // Get the roommates in the current room
+  const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
-    if (roomMates.length !== 1) {
-      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-      return;
-    }
+  if (roomMates.length !== 1) {
+    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+    return;
+  }
 
-    const [victimId] = roomMates[0];
+  const [victimId, victim] = roomMates[0]; // Get the victim's ID and data
 
-    playerData[socket.id].role = "DEAD";
-    playerData[victimId].role = "THE THING";
-    playerData[socket.id].currentRoom = null;
+  // Consume the player: Change roles
+  playerData[socket.id].role = "DEAD";  // The THING dies (consumes)
+  playerData[victimId].role = "THE THING";  // The consumed player becomes THE THING
+  playerData[socket.id].currentRoom = null;  // The THING is no longer in the room
 
-    io.to(victimId).emit("youHaveBeenConsumed");
-    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
-    io.to(socket.id).emit("youAreNowTheThing");
-  });
+  // Set the THING's new room to the consumed player's room
+  playerData[socket.id].currentRoom = playerData[victimId].currentRoom;
+
+  // Track the consumed player's identity for the THING
+  playerData[socket.id].consumedPlayer = {
+    id: victimId,
+    name: victim.displayName,
+    playerNumber: victimId.substring(0, 5) // Extract player number
+  };
+
+  // Broadcast messages to the players
+  io.to(victimId).emit("youHaveBeenConsumed");
+  io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
+  io.to(socket.id).emit("youAreNowTheThing");
+
+  // Broadcast to the whole lobby that the THING has consumed a player
+  const victimName = victim.displayName;
+  io.to(lobbyId).emit('receiveMessage', { from: 'System', text: `THE THING has consumed Player ${victimName}.` });
+
+  // Update room assignments
+  emitPlayerLists(lobbyId);
+});
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
