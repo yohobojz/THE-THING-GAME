@@ -162,6 +162,24 @@ io.on('connection', (socket) => {
       return;
     }
 
+ // Tracker logic: If the player is a Tracker, store the last visited room of the target player
+  if (player.role === 'Tracker' && player.intendedAction === 'visit' && player.intendedTarget) {
+    const target = playerData[player.intendedTarget];
+    if (target) {
+      // Track the last visited room of the target
+      player.lastVisitedRoom = target.currentRoom;  // Store the last visited room
+      console.log(`[DEBUG] Tracker learned that ${target.displayName} last visited ${target.currentRoom}`);
+    }
+  }
+
+  // Security Expert logic: If the player is a Security Expert, inform them of a visitor
+  if (player.role === 'Security Expert' && player.intendedAction === 'visit') {
+    const target = playerData[player.intendedTarget];
+    if (target && target.currentRoom !== socket.id) {
+      io.to(socket.id).emit('chatMessage', { from: 'System', text: 'Someone visited your room.' });
+    }
+  }
+
     if (player.intendedAction === "hold") {
       player.currentRoom = socket.id;
     } else if (player.intendedAction === "visit" && player.intendedTarget) {
