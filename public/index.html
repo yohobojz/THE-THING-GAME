@@ -273,6 +273,13 @@ socket.on('showCommsPopup', (data) => {
   document.getElementById('commsMessage').value = '';  // Clear any previous message
 });
 
+// Show the popup for the Comms Expert
+socket.on('showCommsPopup', (data) => {
+  console.log('Showing Comms Expert popup');  // Debugging log
+  document.getElementById('commsPopup').style.display = 'block';  // Show popup
+  document.getElementById('commsMessage').value = '';  // Clear any previous message
+});
+
 // Send the Comms Expert's message to everyone anonymously
 function sendCommsMessage() {
   const message = document.getElementById('commsMessage').value;
@@ -282,12 +289,17 @@ function sendCommsMessage() {
     return;
   }
 
-  // Send the global message anonymously
+  // Send the global message to the server
   socket.emit('sendCommsMessage', { text: message });
 
   // Hide the popup after sending
   document.getElementById('commsPopup').style.display = 'none';
 }
+
+// Listen for the event to hide the Comms Expert's popup after sending the message
+socket.on('hideCommsPopup', () => {
+  document.getElementById('commsPopup').style.display = 'none';
+});
   </script>
 </body>
 </html>
