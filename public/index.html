@@ -40,6 +40,13 @@
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
 
+<!-- Comms Expert Popup (initially hidden) -->
+<div id="commsPopup" style="display: none;">
+  <h2>Comms Expert Global Message</h2>
+  <textarea id="commsMessage" placeholder="Type your global message here..." maxlength="200"></textarea><br>
+  <button onclick="sendCommsMessage()">Send Message</button>
+</div>
+
   <button id="submitActionBtn" onclick="submitAction()" disabled>Submit Choice</button>
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
@@ -259,6 +266,27 @@
       document.getElementById('submitActionBtn').disabled = true;
       document.getElementById('endTurnBtn').disabled = true;
     });
+  // Show the popup for the Comms Expert
+socket.on('showCommsPopup', (data) => {
+  document.getElementById('commsPopup').style.display = 'block';  // Show popup
+  document.getElementById('commsMessage').value = '';  // Clear any previous message
+});
+
+// Send the Comms Expert's message to everyone anonymously
+function sendCommsMessage() {
+  const message = document.getElementById('commsMessage').value;
+  
+  if (message.trim() === '') {
+    alert('Please type a message.');
+    return;
+  }
+
+  // Send the global message anonymously
+  socket.emit('sendCommsMessage', { text: message });
+
+  // Hide the popup after sending
+  document.getElementById('commsPopup').style.display = 'none';
+}
   </script>
 </body>
 </html>
