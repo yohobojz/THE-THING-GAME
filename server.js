@@ -214,6 +214,7 @@ io.on('connection', (socket) => {
         const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
 
         if (commsExpert) {
+          console.log(`[DEBUG] Comms Expert found: ${commsExpert[1].displayName}`); // Debugging log
           // Send message to Comms Expert to show popup
           io.to(commsExpert[0]).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
 
