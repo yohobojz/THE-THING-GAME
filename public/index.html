@@ -52,6 +52,19 @@
     let isHost = false;
     let myRole = null;
 
+    // 🆕 Restore the role descriptions!
+    const roleDescriptions = {
+      "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
+      "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
+      "Intern": "If you discover the engineer's body, you become the new engineer.",
+      "Comms Expert": "Can send a global message at the start of every even-numbered round.",
+      "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
+      "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
+      "Houndmaster": "Once per game, block visits to your room while holding up.",
+      "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
+      "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
+    };
+
     function createLobby() {
       socket.emit('createLobby');
     }
@@ -192,13 +205,16 @@
         document.getElementById('consumeBtn').style.display = 'inline-block';
       }
 
+      // 🛠 Use tooltip for the role description
+      const desc = roleDescriptions[myRole] || "No description available.";
+
       document.getElementById('playerNumberDisplay').innerHTML =
         `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
-         Your role: <span style="text-decoration: underline dotted; cursor: help;">${myRole}</span>`;
+         Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${myRole}</span>`;
 
       document.getElementById('roundDisplay').innerText = "Round: 1";
 
-      document.getElementById('bioscannerBtn').style.display = 'none'; // reset scanner visibility
+      document.getElementById('bioscannerBtn').style.display = 'none';
     });
 
     socket.on('receiveMessage', ({ from, text }) => {
@@ -210,12 +226,11 @@
     });
 
     socket.on('chatError', (msg) => {
-  alert(msg);
-  // Re-enable the bioscanner button after an error occurs (if it's the Engineer)
-  if (myRole === 'Engineer') {
-    document.getElementById('bioscannerBtn').disabled = false;
-  }
-});
+      alert(msg);
+      if (myRole === 'Engineer') {
+        document.getElementById('bioscannerBtn').disabled = false;
+      }
+    });
 
     socket.on('emergencyMeetingStarted', ({ calledBy }) => {
       const chatBox = document.getElementById('chatBox');
