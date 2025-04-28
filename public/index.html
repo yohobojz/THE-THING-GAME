@@ -268,6 +268,7 @@
     });
   // Show the popup for the Comms Expert
 socket.on('showCommsPopup', (data) => {
+  console.log('Showing Comms Expert popup');  // Debugging log
   document.getElementById('commsPopup').style.display = 'block';  // Show popup
   document.getElementById('commsMessage').value = '';  // Clear any previous message
 });
