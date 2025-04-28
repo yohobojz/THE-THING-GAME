@@ -61,16 +61,17 @@
 
     // 🆕 Restore the role descriptions!
     const roleDescriptions = {
-      "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
-      "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
-      "Intern": "If you discover the engineer's body, you become the new engineer.",
-      "Comms Expert": "Can send a global message at the start of every even-numbered round.",
-      "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
-      "Vlogger": "Can leave one audio log before being consumed. Future visitors to your room hear it.",
-      "Houndmaster": "Once per game, block visits to your room while holding up.",
-      "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
-      "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier."
-    };
+  "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
+  "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
+  "Intern": "If you discover the engineer's body, you become the new engineer.",
+  "Comms Expert": "Can send a global message at the start of every even-numbered round.",
+  "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
+  "Houndmaster": "Once per game, block visits to your room while holding up.",
+  "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
+  "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier.",
+  "Tracker": "Whenever you visit a player's room, learn which room was the last one that player visited.",
+  "Security Expert": "Whenever someone visits your room, learn that someone visited your room (but not who)."
+};
 
     function createLobby() {
       socket.emit('createLobby');
