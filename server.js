@@ -227,6 +227,17 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle Comms Expert sending their global message
+  socket.on('sendCommsMessage', ({ text }) => {
+  const lobbyId = playerData[socket.id].lobbyId;
+
+  // Send the global message to the entire lobby (anonymously)
+  io.to(lobbyId).emit('receiveMessage', { from: 'System', text: text });
+
+  // Optionally, hide the popup for the Comms Expert after sending
+  socket.emit('hideCommsPopup');
+});
+  
   socket.on('consumePlayer', () => {
     const me = playerData[socket.id];
     if (!me) return;
