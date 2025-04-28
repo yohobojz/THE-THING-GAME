@@ -207,6 +207,23 @@ io.on('connection', (socket) => {
           }
         }
       }
+
+      // Check if it's an even-numbered round (Comms Expert should send a message)
+      if (roundNumber[lobbyId] % 2 === 0) {
+        // Find all Comms Experts in the lobby
+        const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
+
+        if (commsExpert) {
+          const commsExpertName = commsExpert[1].displayName;
+
+          // Send a global message from the Comms Expert
+          const globalMessage = `${commsExpertName} sends a global message!`;
+          io.to(commsExpert[0]).emit('receiveMessage', { from: 'System', text: globalMessage });
+
+          // Broadcast to everyone else in the lobby
+          io.to(commsExpert[0]).broadcast.emit('receiveMessage', { from: 'System', text: globalMessage });
+        }
+      }
     }
   });
 
@@ -240,28 +257,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('scanPlayer', ({ target }) => {
-  const player = playerData[socket.id];
-  const targetPlayer = playerData[target];
+    const player = playerData[socket.id];
+    const targetPlayer = playerData[target];
 
-  // Check if the player exists, is an Engineer, and has a ready bioscanner
-  if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
+    // Check if the player exists, is an Engineer, and has a ready bioscanner
+    if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
 
-  // Check if the Engineer has ended their turn
-  if (player.endedTurn) {
-    socket.emit('chatError', "You can no longer scan after ending your turn!");
-    return;
-  }
+    // Check if the Engineer has ended their turn
+    if (player.endedTurn) {
+      socket.emit('chatError', "You can no longer scan after ending your turn!");
+      return;
+    }
 
-  // Check if both players are in the same room
-  if (player.currentRoom !== targetPlayer.currentRoom) {
-    socket.emit('chatError', "You can only scan players in the same room!");
-    return;
-  }
+    // Check if both players are in the same room
+    if (player.currentRoom !== targetPlayer.currentRoom) {
+      socket.emit('chatError', "You can only scan players in the same room!");
+      return;
+    }
 
-  // Perform the scan if both players are in the same room and scan conditions are met
-  const isTheThing = targetPlayer.role === 'THE THING';
-  socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
-});
+    // Perform the scan if both players are in the same room and scan conditions are met
+    const isTheThing = targetPlayer.role === 'THE THING';
+    socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
+  });
 
   socket.on('startGame', (lobbyId) => {
     if (!lobbies[lobbyId]) return;
