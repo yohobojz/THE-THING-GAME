@@ -210,19 +210,20 @@ io.on('connection', (socket) => {
 
       // Check if it's an even-numbered round (Comms Expert should send a message)
       if (roundNumber[lobbyId] % 2 === 0) {
-        // Find all Comms Experts in the lobby
-        const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
+  // Find all Comms Experts in the lobby
+  const commsExpert = Object.entries(playerData).find(([id, player]) => player.role === 'Comms Expert');
 
-        if (commsExpert) {
-          console.log(`[DEBUG] Comms Expert found: ${commsExpert[1].displayName}`); // Debugging log
-          // Send message to Comms Expert to show popup
-          io.to(commsExpert[0]).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
+  if (commsExpert) {
+    const commsExpertName = commsExpert[1].displayName;
 
-          // The message will be displayed anonymously to everyone
-          const globalMessage = "A global message from the Comms Expert!";
-          io.to(commsExpert[0]).broadcast.emit('receiveMessage', { from: 'System', text: globalMessage });
-        }
-      }
+    // Send message to Comms Expert to show popup
+    io.to(commsExpert[0]).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
+
+    // The message will be displayed anonymously to everyone
+    const globalMessage = "A global message from the Comms Expert!";
+    io.to(lobbyId).emit('receiveMessage', { from: 'System', text: globalMessage });  // Broadcast the message to the lobby
+  }
+}
     }
   });
 
