@@ -40,12 +40,12 @@
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
 
-<!-- Comms Expert Popup (initially hidden) -->
-<div id="commsPopup" style="display: none;">
-  <h2>Comms Expert Global Message</h2>
-  <textarea id="commsMessage" placeholder="Type your global message here..." maxlength="200"></textarea><br>
-  <button onclick="sendCommsMessage()">Send Message</button>
-</div>
+  <!-- Comms Expert Popup (initially hidden) -->
+  <div id="commsPopup" style="display: none;">
+    <h2>Comms Expert Global Message</h2>
+    <textarea id="commsMessage" placeholder="Type your global message here..." maxlength="200"></textarea><br>
+    <button onclick="sendCommsMessage()">Send Message</button>
+  </div>
 
   <button id="submitActionBtn" onclick="submitAction()" disabled>Submit Choice</button>
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
@@ -61,17 +61,17 @@
 
     // 🆕 Restore the role descriptions!
     const roleDescriptions = {
-  "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
-  "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
-  "Intern": "If you discover the engineer's body, you become the new engineer.",
-  "Comms Expert": "Can send a global message at the start of every even-numbered round.",
-  "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
-  "Houndmaster": "Once per game, block visits to your room while holding up.",
-  "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
-  "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier.",
-  "Tracker": "Whenever you visit a player's room, learn which room was the last one that player visited.",
-  "Security Expert": "Whenever someone visits your room, learn that someone visited your room (but not who)."
-};
+      "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
+      "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
+      "Intern": "If you discover the engineer's body, you become the new engineer.",
+      "Comms Expert": "Can send a global message at the start of every even-numbered round.",
+      "Soldier": "Can kill one player once per game. If they're innocent, you die too.",
+      "Houndmaster": "Once per game, block visits to your room while holding up.",
+      "Night Owl": "Once per game, visit instead of hold when you normally shouldn’t.",
+      "Defense Expert": "On even rounds, can protect one player from THE THING or Soldier.",
+      "Tracker": "Whenever you visit a player's room, learn which room was the last one that player visited.",
+      "Security Expert": "Whenever someone visits your room, learn that someone visited your room (but not who)."
+    };
 
     function createLobby() {
       socket.emit('createLobby');
@@ -104,19 +104,19 @@
     }
 
     function chooseVisit() {
-  const target = document.getElementById('playerSelect').value;
-  if (!target) {
-    alert("Select a player to visit first!");
-    return;
-  }
-  
-  // Get the name of the player you are visiting
-  const targetName = document.getElementById('playerSelect').selectedOptions[0].text;
+      const target = document.getElementById('playerSelect').value;
+      if (!target) {
+        alert("Select a player to visit first!");
+        return;
+      }
+      
+      // Get the name of the player you are visiting
+      const targetName = document.getElementById('playerSelect').selectedOptions[0].text;
 
-  socket.emit('roomAction', { action: "visit", target });
-  document.getElementById('lastActionNotice').innerText = "You plan to visit " + targetName + "'s room.";
-  document.getElementById('submitActionBtn').disabled = false;
-}
+      socket.emit('roomAction', { action: "visit", target });
+      document.getElementById('lastActionNotice').innerText = "You plan to visit " + targetName + "'s room.";
+      document.getElementById('submitActionBtn').disabled = false;
+    }
 
     function submitAction() {
       socket.emit('submitAction');
@@ -271,47 +271,41 @@
       document.getElementById('submitActionBtn').disabled = true;
       document.getElementById('endTurnBtn').disabled = true;
     });
-  // Show the popup for the Comms Expert
-socket.on('showCommsPopup', (data) => {
-  console.log('Showing Comms Expert popup');  // Debugging log
-  document.getElementById('commsPopup').style.display = 'block';  // Show popup
-  document.getElementById('commsMessage').value = '';  // Clear any previous message
-});
 
-// Show the popup for the Comms Expert
-socket.on('showCommsPopup', (data) => {
-  console.log('Showing Comms Expert popup');  // Debugging log
-  document.getElementById('commsPopup').style.display = 'block';  // Show popup
-  document.getElementById('commsMessage').value = '';  // Clear any previous message
-});
+    // Show the popup for the Comms Expert
+    socket.on('showCommsPopup', (data) => {
+      console.log('Showing Comms Expert popup');  // Debugging log
+      document.getElementById('commsPopup').style.display = 'block';  // Show popup
+      document.getElementById('commsMessage').value = '';  // Clear any previous message
+    });
 
-// Send the Comms Expert's message to everyone anonymously
-function sendCommsMessage() {
-  const message = document.getElementById('commsMessage').value;
-  
-  if (message.trim() === '') {
-    alert('Please type a message.');
-    return;
-  }
+    // Send the Comms Expert's message to everyone anonymously
+    function sendCommsMessage() {
+      const message = document.getElementById('commsMessage').value;
+      
+      if (message.trim() === '') {
+        alert('Please type a message.');
+        return;
+      }
 
-  // Send the global message to the server
-  socket.emit('sendCommsMessage', { text: message });
+      // Send the global message to the server
+      socket.emit('sendCommsMessage', { text: message });
 
-  // Hide the popup after sending
-  document.getElementById('commsPopup').style.display = 'none';
-}
+      // Hide the popup after sending
+      document.getElementById('commsPopup').style.display = 'none';
+    }
 
-// Listen for the event to hide the Comms Expert's popup after sending the message
-socket.on('hideCommsPopup', () => {
-  document.getElementById('commsPopup').style.display = 'none';
-});
+    // Listen for the event to hide the Comms Expert's popup after sending the message
+    socket.on('hideCommsPopup', () => {
+      document.getElementById('commsPopup').style.display = 'none';
+    });
 
-// Display notification for Security Expert when someone visits their room
-socket.on('chatMessage', (data) => {
-  if (data.from === 'System' && data.text === 'Someone visited your room.') {
-    alert('Security Alert: Someone visited your room!');
-  }
-});
+    // Display notification for Security Expert when someone visits their room
+    socket.on('chatMessage', (data) => {
+      if (data.from === 'System' && data.text === 'Someone visited your room.') {
+        alert('Security Alert: Someone visited your room!');
+      }
+    });
 
   </script>
 </body>
