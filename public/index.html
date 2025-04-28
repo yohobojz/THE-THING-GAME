@@ -104,15 +104,19 @@
     }
 
     function chooseVisit() {
-      const target = document.getElementById('playerSelect').value;
-      if (!target) {
-        alert("Select a player to visit first!");
-        return;
-      }
-      socket.emit('roomAction', { action: "visit", target });
-      document.getElementById('lastActionNotice').innerText = "You plan to visit " + target + "'s room.";
-      document.getElementById('submitActionBtn').disabled = false;
-    }
+  const target = document.getElementById('playerSelect').value;
+  if (!target) {
+    alert("Select a player to visit first!");
+    return;
+  }
+  
+  // Get the name of the player you are visiting
+  const targetName = document.getElementById('playerSelect').selectedOptions[0].text;
+
+  socket.emit('roomAction', { action: "visit", target });
+  document.getElementById('lastActionNotice').innerText = "You plan to visit " + targetName + "'s room.";
+  document.getElementById('submitActionBtn').disabled = false;
+}
 
     function submitAction() {
       socket.emit('submitAction');
