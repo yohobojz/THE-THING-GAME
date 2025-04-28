@@ -109,18 +109,12 @@ io.on('connection', (socket) => {
 
     const { lobbyId, currentRoom } = data;
 
-    // Check if the player is THE THING and if they have consumed someone
-    let messageFrom = playerData[socket.id]?.displayName || "Unknown"; // Default name
-    if (data.role === "THE THING" && data.consumedPlayer) {
-      messageFrom = data.consumedPlayer.name;  // Use the consumed player's name
-    }
-
     if (emergencyMeeting[lobbyId]) {
-      io.to(lobbyId).emit('receiveMessage', { from: messageFrom, text: msg });
+      io.to(lobbyId).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
     } else {
       const recipients = Object.keys(playerData).filter(id => playerData[id].lobbyId === lobbyId && playerData[id].currentRoom === currentRoom);
       recipients.forEach(id => {
-        io.to(id).emit('receiveMessage', { from: messageFrom, text: msg });
+        io.to(id).emit('receiveMessage', { from: playerData[socket.id]?.displayName || "Unknown", text: msg });
       });
     }
   });
@@ -152,6 +146,21 @@ io.on('connection', (socket) => {
     } else {
       return;
     }
+  });
+
+  socket.on('submitAction', () => {
+    const player = playerData[socket.id];
+    if (!player) return;
+
+    if (!player.intendedAction) {
+      socket.emit("chatError", "Choose hold or visit first!");
+      return;
+    }
+
+    if (player.lastAction && player.intendedAction === player.lastAction) {
+      socket.emit("chatError", "Can't do the same move two rounds in a row!");
+      return;
+    }
 
     // Tracker logic: If the player is a Tracker, store the last visited room of the target player
     if (player.role === 'Tracker' && player.intendedAction === 'visit' && player.intendedTarget) {
@@ -160,9 +169,6 @@ io.on('connection', (socket) => {
         // Track the last visited room of the target
         player.lastVisitedRoom = target.currentRoom;  // Store the last visited room
         console.log(`[DEBUG] Tracker learned that ${target.displayName} last visited ${target.currentRoom}`);
-        
-        // Send the Tracker a message with the information
-        io.to(socket.id).emit('chatMessage', { from: 'System', text: `You learned that ${target.displayName} last visited Room ${target.currentRoom}.` });
       }
     }
 
@@ -267,42 +273,37 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const [victimId, victim] = roomMates[0]; // Get the victim's ID and data
+    const [victimId] = roomMates[0];
 
-    // Consume the player: Change roles
-    playerData[socket.id].role = "DEAD";  // The THING dies (consumes)
-    playerData[victimId].role = "THE THING";  // The consumed player becomes THE THING
-    playerData[socket.id].currentRoom = null;  // The THING is no longer in the room
+    playerData[socket.id].role = "DEAD";
+    playerData[victimId].role = "THE THING";
+    playerData[socket.id].currentRoom = null;
 
-    // Set the THING's new room to the consumed player's room
-    playerData[socket.id].currentRoom = playerData[victimId].currentRoom;
-
-    // Track the consumed player's identity for the THING
-    playerData[socket.id].consumedPlayer = {
-      id: victimId,
-      name: victim.displayName,
-      playerNumber: victimId.substring(0, 5) // Extract player number
-    };
-
-    emitPlayerLists(lobbyId);
+    io.to(victimId).emit("youHaveBeenConsumed");
+    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
+    io.to(socket.id).emit("youAreNowTheThing");
   });
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
     const targetPlayer = playerData[target];
 
+    // Check if the player exists, is an Engineer, and has a ready bioscanner
     if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
 
+    // Check if the Engineer has ended their turn
     if (player.endedTurn) {
       socket.emit('chatError', "You can no longer scan after ending your turn!");
       return;
     }
 
+    // Check if both players are in the same room
     if (player.currentRoom !== targetPlayer.currentRoom) {
       socket.emit('chatError', "You can only scan players in the same room!");
       return;
     }
 
+    // Perform the scan if both players are in the same room and scan conditions are met
     const isTheThing = targetPlayer.role === 'THE THING';
     socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
   });
