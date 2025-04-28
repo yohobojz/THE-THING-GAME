@@ -210,8 +210,12 @@
     });
 
     socket.on('chatError', (msg) => {
-      alert(msg);
-    });
+  alert(msg);
+  // Re-enable the bioscanner button after an error occurs (if it's the Engineer)
+  if (myRole === 'Engineer') {
+    document.getElementById('bioscannerBtn').disabled = false;
+  }
+});
 
     socket.on('emergencyMeetingStarted', ({ calledBy }) => {
       const chatBox = document.getElementById('chatBox');
