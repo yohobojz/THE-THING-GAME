@@ -240,15 +240,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('scanPlayer', ({ target }) => {
-    const player = playerData[socket.id];
-    const targetPlayer = playerData[target];
+  const player = playerData[socket.id];
+  const targetPlayer = playerData[target];
 
-    if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
+  // Check if the player exists, is an Engineer, and has a ready bioscanner
+  if (!player || !targetPlayer || player.role !== 'Engineer' || !player.bioscannerReady) return;
 
-    const isTheThing = targetPlayer.role === 'THE THING';
+  // Check if the Engineer has ended their turn
+  if (player.endedTurn) {
+    socket.emit('chatError', "You can no longer scan after ending your turn!");
+    return;
+  }
 
-    socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
-  });
+  // Check if both players are in the same room
+  if (player.currentRoom !== targetPlayer.currentRoom) {
+    socket.emit('chatError', "You can only scan players in the same room!");
+    return;
+  }
+
+  // Perform the scan if both players are in the same room and scan conditions are met
+  const isTheThing = targetPlayer.role === 'THE THING';
+  socket.emit('scanResult', { playerName: targetPlayer.displayName, isTheThing });
+});
 
   socket.on('startGame', (lobbyId) => {
     if (!lobbies[lobbyId]) return;
