@@ -278,6 +278,7 @@ io.on('connection', (socket) => {
     const [victimId] = roomMates[0];
 
     playerData[socket.id].role = "DEAD";
+    playerData[socket.id].endedTurn = true;
     playerData[victimId].role = "THE THING";
     playerData[socket.id].currentRoom = null;
 
