@@ -251,6 +251,9 @@ io.on('connection', (socket) => {
       if (commsEntry) {
         const [commsId] = commsEntry;
         io.to(commsId).emit('showCommsPopup', { message: "You can send a global message to everyone!" });
+    // The message will be displayed anonymously to everyone
+          const globalMessage = "A global message from the Comms Expert!";
+          io.to(lobbyId).emit('receiveMessage', { from: 'System', text: globalMessage });  // Broadcast the message to the lobby
       }
     }
   }
