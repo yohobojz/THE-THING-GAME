@@ -259,7 +259,6 @@ io.on('connection', (socket) => {
   }
 });
 
-
   socket.on('sendCommsMessage', ({ text }) => {
     const lobbyId = playerData[socket.id].lobbyId;
 
@@ -271,53 +270,39 @@ io.on('connection', (socket) => {
   });
 
   socket.on('consumePlayer', () => {
-  const me = playerData[socket.id];
-  if (!me) return;
-  if (me.role !== "THE THING" || me.endedTurn) {
-    socket.emit("consumeFailed", "Can't consume!");
-    return;
-  }
+    const me = playerData[socket.id];
+    if (!me) return;
 
-  const lobbyId = me.lobbyId;
-  const roomMates = Object.entries(playerData)
-    .filter(([id, p]) =>
-      p.lobbyId === lobbyId &&
-      p.currentRoom === me.currentRoom &&
-      id !== socket.id &&
-      p.role !== "DEAD"
-    );
-  if (roundNumber[lobbyId] === 1) {
-    socket.emit("consumeFailed", "You can't consume on Round 1.");
-    return;
-  }
-  if (roomMates.length !== 1) {
-    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-    return;
-  }
+    if (me.role !== "THE THING" || me.endedTurn) {
+      socket.emit("consumeFailed", "Can't consume!");
+      return;
+    }
 
-  const [victimId] = roomMates[0];
+    const lobbyId = me.lobbyId;
 
-  // 1) Old THING dies & marks their turn ended
-  me.role      = "DEAD";
-  me.endedTurn = true;
+    const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
-  // 2) Promote the victim to THE THING, and immediately mark them as having ended
-  const newThing = playerData[victimId];
-  newThing.role      = "THE THING";
-  newThing.endedTurn = true;
+    if (roundNumber[lobbyId] === 1) {
+      socket.emit("consumeFailed", "You can't consume on Round 1.");
+      return;
+    }
 
-  // 3) Clear the old room
-  me.currentRoom = null;
+    if (roomMates.length !== 1) {
+      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+      return;
+    }
 
-  // 4) Notify the victim that they’re now The Thing
-  io.to(victimId).emit("youAreNowTheThing");
+    const [victimId] = roomMates[0];
 
-  // 5) Tell them they’ve been consumed (their client-side alert)
-  io.to(victimId).emit("youHaveBeenConsumed");
+    playerData[socket.id].role = "DEAD";
+    playerData[socket.id].endedTurn = true;
+    playerData[victimId].role = "THE THING";
+    playerData[socket.id].currentRoom = null;
 
-  // 6) Refresh everyone’s UI lists
-  emitPlayerLists(lobbyId);
-});
+    io.to(victimId).emit("youHaveBeenConsumed");
+    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
+    io.to(socket.id).emit("youAreNowTheThing");
+  });
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
