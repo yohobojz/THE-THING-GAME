@@ -297,31 +297,25 @@ io.on('connection', (socket) => {
 
   const [victimId] = roomMates[0];
 
-  // Capture the old THING's endedTurn status:
-  const oldEnded = me.endedTurn;
-
-  // 1) Old THING dies:
-  me.role = "DEAD";
+  // 1) Old THING dies & marks their turn ended
+  me.role      = "DEAD";
   me.endedTurn = true;
 
-  // 2) Promote the victim to THE THING, and inherit oldEnded:
+  // 2) Promote the victim to THE THING, and immediately mark them as having ended
   const newThing = playerData[victimId];
-  newThing.role = "THE THING";
-  newThing.endedTurn = oldEnded;
+  newThing.role      = "THE THING";
+  newThing.endedTurn = true;
 
-  // 3) Transfer room identity if needed
+  // 3) Clear the old room
   me.currentRoom = null;
 
-  // 4) Notify clients:
-  io.to(victimId).emit("youHaveBeenConsumed");
-  io.to(victimId).emit("gameStarted", {
-    playerNumber: "???",
-    totalPlayers: "???",
-    role: "DEAD"
-  });
-  io.to(socket.id).emit("youAreNowTheThing");
+  // 4) Notify the victim that they’re now The Thing
+  io.to(victimId).emit("youAreNowTheThing");
 
-  // 5) Refresh UI lists
+  // 5) Tell them they’ve been consumed (their client-side alert)
+  io.to(victimId).emit("youHaveBeenConsumed");
+
+  // 6) Refresh everyone’s UI lists
   emitPlayerLists(lobbyId);
 });
 
