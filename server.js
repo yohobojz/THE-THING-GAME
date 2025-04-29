@@ -275,6 +275,12 @@ io.on('connection', (socket) => {
 
     const lobbyId = me.lobbyId;
 
+ // Ensure the lobby exists
+    if (!lobbies[lobbyId]) {
+        console.error(`Error: Lobby with ID ${lobbyId} does not exist!`);
+        return;
+    }
+
     // Get the roommates in the current room
     const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
@@ -320,6 +326,10 @@ io.on('connection', (socket) => {
     // Ensure that the THING can no longer visit the room of the consumed player
     io.to(socket.id).emit('updatePlayerList', playerData[lobbyId].players.filter(id => id !== victimId));
 
+    // Update player list to reflect that the THING's room and identity have changed
+    // You should probably also reset the old identity’s room.
+    io.to(lobbyId).emit('updatePlayerList', playerData[lobbyId].players);
+     
   });
 
   socket.on('scanPlayer', ({ target }) => {
