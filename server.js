@@ -16,79 +16,51 @@ const roundNumber = {};
 function assignRoles(players) {
   const shuffled = [...players].sort(() => Math.random() - 0.5);
   const roles = {};
-
   roles[shuffled[0]] = "THE THING";
   roles[shuffled[1]] = "Engineer";
-
-  for (let i = 2; i < shuffled.length; i++) {
-    roles[shuffled[i]] = "Intern";
-  }
-
-  const optionalRoles = ["Comms Expert", "Soldier", "Houndmaster", "Night Owl", "Defense Expert", "Tracker", "Security Expert"];
+  for (let i = 2; i < shuffled.length; i++) roles[shuffled[i]] = "Intern";
+  const optionalRoles = ["Comms Expert","Soldier","Houndmaster","Night Owl","Defense Expert","Tracker","Security Expert"];
   const internIds = shuffled.slice(2);
-
-  let guaranteedInternCount = 0;
-  if (players.length >= 8) guaranteedInternCount = 2;
-  else if (players.length >= 6) guaranteedInternCount = 1;
-
-  const assignableCount = Math.max(0, internIds.length - guaranteedInternCount);
-  const shuffledOptional = optionalRoles.sort(() => Math.random() - 0.5);
-
-  for (let i = 0; i < assignableCount && i < shuffledOptional.length; i++) {
-    const playerId = internIds[i];
-    roles[playerId] = shuffledOptional[i];
-  }
-
+  let guaranteed = players.length >= 8 ? 2 : players.length >= 6 ? 1 : 0;
+  const assignable = Math.max(0, internIds.length - guaranteed);
+  optionalRoles.sort(() => Math.random() - 0.5).slice(0, assignable)
+    .forEach((role, i) => { roles[internIds[i]] = role; });
   return roles;
 }
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
+  // --- LOBBY CREATION / JOINING ---
   socket.on('createLobby', () => {
-    const lobbyId = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const lobbyId = Math.random().toString(36).substr(2,6).toUpperCase();
     lobbies[lobbyId] = { players: [socket.id], host: socket.id };
     playerData[socket.id] = {
-      lobbyId,
-      role: 'unknown',
-      displayName: '',
-      messagesThisRound: 0,
-      currentRoom: socket.id,
-      lastAction: null,
-      intendedAction: null,
-      intendedTarget: null,
-      endedTurn: false,
-      roundsSurvived: 0,
-      bioscannerReady: false
+      lobbyId, role: 'unknown', displayName: '',
+      messagesThisRound:0, currentRoom:socket.id,
+      lastAction:null, intendedAction:null,intendedTarget:null,
+      endedTurn:false, roundsSurvived:0, bioscannerReady:false,
+      soldierUsed: false
     };
     emergencyMeeting[lobbyId] = null;
     socket.join(lobbyId);
     emitPlayerLists(lobbyId);
-    socket.emit('lobbyCreated', { lobbyId, isHost: true });
+    socket.emit('lobbyCreated',{ lobbyId, isHost:true });
   });
 
   socket.on('joinLobby', (lobbyId) => {
-    if (lobbies[lobbyId]) {
-      lobbies[lobbyId].players.push(socket.id);
-      playerData[socket.id] = {
-        lobbyId,
-        role: 'unknown',
-        displayName: '',
-        messagesThisRound: 0,
-        currentRoom: socket.id,
-        lastAction: null,
-        intendedAction: null,
-        intendedTarget: null,
-        endedTurn: false,
-        roundsSurvived: 0,
-        bioscannerReady: false
-      };
-      socket.join(lobbyId);
-      emitPlayerLists(lobbyId);
-      socket.emit('lobbyJoined', { lobbyId, isHost: false });
-    } else {
-      socket.emit('lobbyError', 'Lobby does not exist.');
-    }
+    if (!lobbies[lobbyId]) return socket.emit('lobbyError','Lobby does not exist.');
+    lobbies[lobbyId].players.push(socket.id);
+    playerData[socket.id] = {
+      lobbyId, role:'unknown', displayName:'',
+      messagesThisRound:0, currentRoom:socket.id,
+      lastAction:null, intendedAction:null,intendedTarget:null,
+      endedTurn:false, roundsSurvived:0, bioscannerReady:false,
+      soldierUsed: false
+    };
+    socket.join(lobbyId);
+    emitPlayerLists(lobbyId);
+    socket.emit('lobbyJoined',{ lobbyId, isHost:false });
   });
 
   socket.on('sendMessage', (msg) => {
@@ -365,6 +337,51 @@ socket.on('consumePlayer', () => {
       io.to(id).emit('gameStarted', { playerNumber: index + 1, totalPlayers: lobbies[lobbyId].players.length, role: assignedRoles[id] });
     });
 
+    emitPlayerLists(lobbyId);
+  });
+
+// --- SOLDIER ABILITY ---
+  socket.on('useSoldier', ({ target }) => {
+    const me = playerData[socket.id];
+    const victim = playerData[target];
+    if (!me || !victim) return;
+    // must be soldier, not used yet, and before ending turn
+    if (me.role !== 'Soldier' || me.soldierUsed || me.endedTurn) {
+      return socket.emit('chatError','Cannot use your kill right now.');
+    }
+    // must be in same room
+    if (me.currentRoom !== victim.currentRoom) {
+      return socket.emit('chatError','Target not in your room.');
+    }
+
+    // mark used
+    me.soldierUsed = true;
+
+    // if victim is THE THING
+    if (victim.role === 'THE THING') {
+      victim.role      = 'DEAD';
+      victim.endedTurn = true;
+      // notify victim & soldier
+      io.to(target).emit('youWereKilledBySoldier');
+      io.to(socket.id).emit('soldierKillResult',{
+        killedThing: true,
+        targetName: victim.displayName
+      });
+    } else {
+      // innocent → both die
+      victim.role      = 'DEAD';
+      victim.endedTurn = true;
+      me.role          = 'DEAD';
+      me.endedTurn     = true;
+      io.to(target).emit('youWereKilledBySoldier');
+      io.to(socket.id).emit('soldierKillResult',{
+        killedThing: false,
+        targetName: victim.displayName
+      });
+    }
+
+    // refresh lists so DEAD count out of future turns
+    const lobbyId = me.lobbyId;
     emitPlayerLists(lobbyId);
   });
 
