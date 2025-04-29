@@ -201,10 +201,12 @@ io.on('connection', (socket) => {
   const lobby = lobbies[lobbyId];
   if (!lobby) return;
 
-  // Only consider **alive** players when deciding if the round is over
-  const alivePlayers = lobby.players.filter(id => playerData[id]?.role !== "DEAD");
+   // Only count players who are not DEAD
+  const alivePlayers = lobby.players.filter(
+    id => playerData[id]?.role !== "DEAD"
+  );
 
-  // Now check if *all* alive players have ended their turn
+  // Advance when every ALIVE player has ended their turn
   const allDone = alivePlayers.every(id => playerData[id].endedTurn);
 
   if (allDone) {
