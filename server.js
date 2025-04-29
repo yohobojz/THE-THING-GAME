@@ -264,7 +264,7 @@ io.on('connection', (socket) => {
     socket.emit('hideCommsPopup');
   });
 
-   socket.on('consumePlayer', () => {
+  socket.on('consumePlayer', () => {
   const me = playerData[socket.id];
   if (!me) return;
 
@@ -277,8 +277,14 @@ io.on('connection', (socket) => {
 
   // Ensure the lobby exists
   if (!lobbies[lobbyId]) {
-      console.error(`Error: Lobby with ID ${lobbyId} does not exist!`);
-      return;
+    console.error(`Error: Lobby with ID ${lobbyId} does not exist!`);
+    return;
+  }
+
+  // Ensure playerData for the lobby exists
+  if (!playerData[lobbyId]) {
+    console.error(`Error: playerData for lobby with ID ${lobbyId} does not exist!`);
+    return;
   }
 
   // Get the roommates in the current room
@@ -325,6 +331,11 @@ io.on('connection', (socket) => {
 
   // Ensure that the THING can no longer visit the room of the consumed player
   io.to(socket.id).emit('updatePlayerList', playerData[lobbyId].players.filter(id => id !== victimId));
+
+  // Check if playerData[lobbyId] is properly structured
+  if (!playerData[lobbyId]?.players) {
+    console.error(`Error: 'players' not found in playerData for lobby: ${lobbyId}`);
+  }
 
   // Update player list to reflect that the THING's room and identity have changed
   // You should probably also reset the old identity’s room.
