@@ -269,39 +269,55 @@ io.on('connection', (socket) => {
     socket.emit('hideCommsPopup');
   });
 
-  socket.on('consumePlayer', () => {
+    socket.on('consumePlayer', () => {
     const me = playerData[socket.id];
     if (!me) return;
 
+    // only THE THING, and only if they haven't ended their turn yet
     if (me.role !== "THE THING" || me.endedTurn) {
       socket.emit("consumeFailed", "Can't consume!");
       return;
     }
 
     const lobbyId = me.lobbyId;
-
-    const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
+    const roomMates = Object.entries(playerData)
+      .filter(([id, p]) =>
+        p.lobbyId === lobbyId &&
+        p.currentRoom === me.currentRoom &&
+        id !== socket.id &&
+        p.role !== "DEAD"
+      );
 
     if (roundNumber[lobbyId] === 1) {
       socket.emit("consumeFailed", "You can't consume on Round 1.");
       return;
     }
-
     if (roomMates.length !== 1) {
       socket.emit("consumeFailed", "You must be alone with exactly one other player.");
       return;
     }
 
     const [victimId] = roomMates[0];
+    const victim = playerData[victimId];
 
-    playerData[socket.id].role = "DEAD";
-    playerData[socket.id].endedTurn = true;
-    playerData[victimId].role = "THE THING";
-    playerData[socket.id].currentRoom = null;
+    // 1) Kill off the old Thing
+    me.role      = "DEAD";
+    me.endedTurn = true;
 
+    // 2) Promote the victim to THE THING
+    victim.role      = "THE THING";
+    //    and mark them as having already ended this turn (so they don't get stuck)
+    victim.endedTurn = true;
+
+    // 3) Clear the old room (they’re out of play)
+    me.currentRoom = null;
+
+    // 4) Notify just those two sockets:
+    io.to(victimId).emit("youAreNowTheThing");
     io.to(victimId).emit("youHaveBeenConsumed");
-    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
-    io.to(socket.id).emit("youAreNowTheThing");
+
+    // 5) Refresh everyone’s lobby & dropdowns
+    emitPlayerLists(lobbyId);
   });
 
   socket.on('scanPlayer', ({ target }) => {
