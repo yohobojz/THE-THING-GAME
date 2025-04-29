@@ -295,9 +295,15 @@ io.on('connection', (socket) => {
 
     const [victimId] = roomMates[0];
 
+    // 1) Mark the old THING as dead & ended their turn
     playerData[socket.id].role = "DEAD";
     playerData[socket.id].endedTurn = true;
+
+    // 2) Promote the victim to THE THING and immediately mark them done for this round
     playerData[victimId].role = "THE THING";
+    playerData[victimId].endedTurn = true;   // ← Add this line!
+
+    // 3) Clear the eater's room
     playerData[socket.id].currentRoom = null;
 
     io.to(victimId).emit("youHaveBeenConsumed");
