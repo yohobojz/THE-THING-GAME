@@ -51,6 +51,15 @@
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <button id="bioscannerBtn" onclick="useBioscanner()" style="display:none;">Use Bioscanner</button>
+  <!-- Soldier Kill button (only shown to Soldiers) -->
+  <button id="soldierBtn" onclick="showSoldierPopup()" style="display:none;">Kill</button>
+
+  <!-- Soldier Popup (initially hidden) -->
+  <div id="soldierPopup" style="display:none; position:absolute; background:#fff; border:1px solid #333; padding:1em;">
+    <h2>Soldier: Choose a target</h2>
+    <select id="soldierSelect"></select><br>
+    <button onclick="confirmKill()">Confirm Kill</button>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -59,7 +68,6 @@
     let isHost = false;
     let myRole = null;
 
-    // 🆕 Restore the role descriptions!
     const roleDescriptions = {
       "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
       "Engineer": "Survive 3 rounds to unlock a bioscanner that reveals roles when in the same room as other players.",
@@ -207,6 +215,57 @@
           dropdown.appendChild(opt);
         }
       });
+    });
+
+    function showSoldierPopup() {
+      // populate with everyone in your current room except you
+      const select = document.getElementById('soldierSelect');
+      select.innerHTML = '';
+      // find who’s in our room from the last 'updatePlayerList'
+      window.currentRoomPlayers
+        .filter(p => p.id !== socket.id)
+        .forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.text = p.name;
+          select.appendChild(opt);
+        });
+      document.getElementById('soldierPopup').style.display = 'block';
+    }
+
+    function confirmKill() {
+      const target = document.getElementById('soldierSelect').value;
+      socket.emit('useSoldier', { target });
+      document.getElementById('soldierPopup').style.display = 'none';
+      document.getElementById('soldierBtn').disabled = true;
+    }
+
+    socket.on('gameStarted', data => {
+      myRole = data.role;
+      // … your existing code …
+      if (myRole === 'Soldier') {
+        document.getElementById('soldierBtn').style.display = 'inline-block';
+      }
+    });
+
+    // keep track of latest room‐mate list
+    socket.on('updatePlayerList', players => {
+      window.currentRoomPlayers = players;
+      // … your existing code to repopulate dropdown …
+    });
+
+    // feedback after kill
+    socket.on('soldierKillResult', ({ killedThing, targetName }) => {
+      const msg = killedThing
+        ? `You’ve slain THE THING (${targetName})!`
+        : `You attacked ${targetName}. Both of you are dead.`;
+      alert(msg);
+    });
+    socket.on('youWereKilledBySoldier', () => {
+      alert("💀 You were killed by the Soldier.");
+      // you may also want to disable your buttons:
+      document.getElementById('submitActionBtn').disabled = true;
+      document.getElementById('endTurnBtn').disabled = true;
     });
 
     socket.on('gameStarted', (data) => {
