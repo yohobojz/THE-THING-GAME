@@ -268,6 +268,12 @@ io.on('connection', (socket) => {
 
     const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
+    const lobbyId = me.lobbyId;
+    if (roundNumber[lobbyId] === 1) {
+      socket.emit("consumeFailed", "You can't consume on Round 1.");
+      return;
+    }
+
     if (roomMates.length !== 1) {
       socket.emit("consumeFailed", "You must be alone with exactly one other player.");
       return;
