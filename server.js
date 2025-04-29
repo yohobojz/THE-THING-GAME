@@ -201,13 +201,28 @@ io.on('connection', (socket) => {
   const lobby = lobbies[lobbyId];
   if (!lobby) return;
 
+  // === DEBUG LOGGING START ===
+  console.log(`\n[DEBUG endTurn] lobbyId=${lobbyId}`);
+  console.log(`  All players: ${lobby.players.join(', ')}`);
+  lobby.players.forEach(id => {
+    const pd = playerData[id];
+    console.log(`    ${id}: role=${pd.role}, endedTurn=${pd.endedTurn}`);
+  });
+  // === DEBUG LOGGING END ===
+
    // Only count players who are not DEAD
   const alivePlayers = lobby.players.filter(
     id => playerData[id]?.role !== "DEAD"
   );
 
+ // === DEBUG: alivePlayers list ===
+  console.log(`  Alive players: ${alivePlayers.join(', ')}`);
+
   // Advance when every ALIVE player has ended their turn
   const allDone = alivePlayers.every(id => playerData[id].endedTurn);
+
+// === DEBUG: allDone value ===
+  console.log(`  allDone = ${allDone}\n`);
 
   if (allDone) {
     roundNumber[lobbyId]++;
