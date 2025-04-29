@@ -7,6 +7,15 @@
       font-weight: bold;
       background-color: #f0f0f0;
     }
+    /* Simple popup styling */
+    #soldierPopup {
+      display: none;
+      position: absolute;
+      background: #fff;
+      border: 1px solid #333;
+      padding: 1em;
+      z-index: 100;
+    }
   </style>
 </head>
 <body>
@@ -40,10 +49,10 @@
   <button onclick="chooseVisit()">Visit Room</button>
   <p id="lastActionNotice"></p>
 
-  <!-- Comms Expert Popup (initially hidden) -->
+  <!-- Comms Expert Popup -->
   <div id="commsPopup" style="display: none;">
     <h2>Comms Expert Global Message</h2>
-    <textarea id="commsMessage" placeholder="Type your global message here..." maxlength="200"></textarea><br>
+    <textarea id="commsMessage" maxlength="200" placeholder="Type your global message…"></textarea><br>
     <button onclick="sendCommsMessage()">Send Message</button>
   </div>
 
@@ -51,11 +60,11 @@
   <button id="endTurnBtn" onclick="endTurn()" disabled>End Turn</button>
 
   <button id="bioscannerBtn" onclick="useBioscanner()" style="display:none;">Use Bioscanner</button>
-  <!-- Soldier Kill button (only shown to Soldiers) -->
+  <!-- Soldier Kill button -->
   <button id="soldierBtn" onclick="showSoldierPopup()" style="display:none;">Kill</button>
 
-  <!-- Soldier Popup (initially hidden) -->
-  <div id="soldierPopup" style="display:none; position:absolute; background:#fff; border:1px solid #333; padding:1em;">
+  <!-- Soldier Popup -->
+  <div id="soldierPopup">
     <h2>Soldier: Choose a target</h2>
     <select id="soldierSelect"></select><br>
     <button onclick="confirmKill()">Confirm Kill</button>
@@ -65,8 +74,8 @@
   <script>
     const socket = io();
     let currentLobbyId = null;
-    let isHost = false;
     let myRole = null;
+    let currentRoomPlayers = []; // latest list for popups
 
     const roleDescriptions = {
       "THE THING": "Can consume another player if alone with them in a room. Takes their identity and player number.",
@@ -81,291 +90,204 @@
       "Security Expert": "Whenever someone visits your room, learn that someone visited your room (but not who)."
     };
 
-    function createLobby() {
-      socket.emit('createLobby');
-    }
-
-    function joinLobby() {
-      const lobbyId = document.getElementById('lobbyInput').value;
-      socket.emit('joinLobby', lobbyId);
-    }
-
-    function startGame() {
-      socket.emit('startGame', currentLobbyId);
-    }
-
-    function sendMessage() {
+    // Lobby controls
+    function createLobby(){ socket.emit('createLobby'); }
+    function joinLobby(){ socket.emit('joinLobby', document.getElementById('lobbyInput').value); }
+    function startGame(){ socket.emit('startGame', currentLobbyId); }
+    function sendMessage(){
       const msg = document.getElementById('chatInput').value;
       socket.emit('sendMessage', msg);
       document.getElementById('chatInput').value = '';
     }
-
-    function callMeeting() {
+    function callMeeting(){
       socket.emit('callEmergencyMeeting');
       document.getElementById('emergencyBtn').disabled = true;
     }
 
-    function chooseHoldUp() {
-      socket.emit('roomAction', { action: "hold" });
-      document.getElementById('lastActionNotice').innerText = "You plan to hold up in your room.";
+    // Room actions
+    function chooseHoldUp(){
+      socket.emit('roomAction',{action:"hold"});
+      document.getElementById('lastActionNotice').innerText = "You plan to hold up.";
       document.getElementById('submitActionBtn').disabled = false;
     }
-
-    function chooseVisit() {
-      const target = document.getElementById('playerSelect').value;
-      if (!target) {
-        alert("Select a player to visit first!");
-        return;
-      }
-      
-      // Get the name of the player you are visiting
-      const targetName = document.getElementById('playerSelect').selectedOptions[0].text;
-
-      socket.emit('roomAction', { action: "visit", target });
-      document.getElementById('lastActionNotice').innerText = "You plan to visit " + targetName + "'s room.";
+    function chooseVisit(){
+      const sel = document.getElementById('playerSelect');
+      const target = sel.value;
+      if(!target){ alert("Select someone!"); return; }
+      const name = sel.selectedOptions[0].text;
+      socket.emit('roomAction',{action:"visit",target});
+      document.getElementById('lastActionNotice').innerText = `You plan to visit ${name}.`;
       document.getElementById('submitActionBtn').disabled = false;
     }
-
-    function submitAction() {
+    function submitAction(){
       socket.emit('submitAction');
       document.getElementById('submitActionBtn').disabled = true;
       document.getElementById('endTurnBtn').disabled = false;
-      document.getElementById('lastActionNotice').innerText += " (locked in)";
     }
-
-    function endTurn() {
+    function endTurn(){
       socket.emit('endTurn');
       document.getElementById('endTurnBtn').disabled = true;
-      document.getElementById('lastActionNotice').innerText = "You ended your turn.";
     }
 
-    function consume() {
-      socket.emit('consumePlayer');
-    }
+    // Consume
+    function consume(){ socket.emit('consumePlayer'); }
 
-    function useBioscanner() {
+    // Bioscanner
+    function useBioscanner(){
       const target = document.getElementById('playerSelect').value;
-      if (!target) {
-        alert("Select a player to scan first!");
-        return;
-      }
-      socket.emit('scanPlayer', { target });
+      if(!target){ alert("Select target!"); return; }
+      socket.emit('scanPlayer',{target});
       document.getElementById('bioscannerBtn').disabled = true;
       document.getElementById('lastActionNotice').innerText = "You used the bioscanner.";
     }
 
-    socket.on('scanResult', (result) => {
-      const message = result.isTheThing
-        ? `${result.playerName} is THE THING!`
-        : `${result.playerName} is not THE THING.`;
-
-      const chatBox = document.getElementById('chatBox');
-      const p = document.createElement('p');
-      p.innerText = message;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
-
-      document.getElementById('bioscannerBtn').disabled = false;
-    });
-
-    socket.on('bioscannerUnlocked', () => {
-      console.log("[CLIENT] Bioscanner unlocked!");
-      document.getElementById('bioscannerBtn').style.display = 'inline-block';
-    });
-
-    socket.on('lobbyCreated', (data) => {
-      currentLobbyId = data.lobbyId;
-      isHost = data.isHost;
-      document.getElementById('status').innerText = 'Lobby Created: ' + currentLobbyId;
-      if (isHost) {
-        document.getElementById('startGameBtn').style.display = 'block';
-      }
-    });
-
-    socket.on('lobbyJoined', (data) => {
-      currentLobbyId = data.lobbyId;
-      isHost = data.isHost;
-      document.getElementById('status').innerText = 'Joined Lobby: ' + currentLobbyId;
-    });
-
-    socket.on('playerListUpdated', (players) => {
-      const list = document.getElementById('players');
-      list.innerHTML = '';
-      players.forEach(p => {
-        const li = document.createElement('li');
-        li.innerText = p;
-        list.appendChild(li);
-      });
-    });
-
-    socket.on('updatePlayerList', (players) => {
-      const dropdown = document.getElementById('playerSelect');
-      dropdown.innerHTML = "";
-      if (players.length <= 1) {
-        const opt = document.createElement('option');
-        opt.text = "(waiting for other players...)";
-        opt.disabled = true;
-        dropdown.appendChild(opt);
-      }
-      players.forEach(p => {
-        if (p.id !== socket.id) {
-          const opt = document.createElement('option');
-          opt.value = p.id;
-          opt.text = p.name;
-          dropdown.appendChild(opt);
-        }
-      });
-    });
-
-    function showSoldierPopup() {
-      // populate with everyone in your current room except you
-      const select = document.getElementById('soldierSelect');
-      select.innerHTML = '';
-      // find who’s in our room from the last 'updatePlayerList'
-      window.currentRoomPlayers
-        .filter(p => p.id !== socket.id)
-        .forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.id;
-          opt.text = p.name;
-          select.appendChild(opt);
-        });
-      document.getElementById('soldierPopup').style.display = 'block';
+    // Comms Expert
+    function sendCommsMessage(){
+      const txt = document.getElementById('commsMessage').value.trim();
+      if(!txt){ alert("Type a message."); return; }
+      socket.emit('sendCommsMessage',{text:txt});
+      document.getElementById('commsPopup').style.display='none';
     }
 
-    function confirmKill() {
+    // Soldier popup
+    function showSoldierPopup(){
+      const sel = document.getElementById('soldierSelect');
+      sel.innerHTML = '';
+      currentRoomPlayers
+        .filter(p=>p.id!==socket.id)
+        .forEach(p=>{
+          const o = document.createElement('option');
+          o.value = p.id; o.text = p.name;
+          sel.appendChild(o);
+        });
+      document.getElementById('soldierPopup').style.display='block';
+    }
+    function confirmKill(){
       const target = document.getElementById('soldierSelect').value;
-      socket.emit('useSoldier', { target });
-      document.getElementById('soldierPopup').style.display = 'none';
+      socket.emit('useSoldier',{target});
+      document.getElementById('soldierPopup').style.display='none';
       document.getElementById('soldierBtn').disabled = true;
     }
 
-    socket.on('gameStarted', data => {
-      myRole = data.role;
-      // … your existing code …
-      if (myRole === 'Soldier') {
-        document.getElementById('soldierBtn').style.display = 'inline-block';
+    // ==== Socket handlers ====
+
+    socket.on('lobbyCreated', data=>{
+      currentLobbyId=data.lobbyId;
+      document.getElementById('status').innerText=`Lobby Created: ${data.lobbyId}`;
+      if(data.isHost) document.getElementById('startGameBtn').style.display='block';
+    });
+    socket.on('lobbyJoined', data=>{
+      currentLobbyId=data.lobbyId;
+      document.getElementById('status').innerText=`Joined Lobby: ${data.lobbyId}`;
+    });
+
+    socket.on('playerListUpdated', players=>{
+      const ul=document.getElementById('players');
+      ul.innerHTML='';
+      players.forEach(p=>{
+        const li=document.createElement('li'); li.innerText=p; ul.appendChild(li);
+      });
+    });
+
+    // both for visit dropdown & soldier popup
+    socket.on('updatePlayerList', players=>{
+      currentRoomPlayers = players; 
+      const d = document.getElementById('playerSelect');
+      d.innerHTML = '';
+      if(players.length<=1){
+        const o=document.createElement('option');
+        o.text="(waiting…)"; o.disabled=true;
+        d.appendChild(o);
+      } else {
+        players.forEach(p=>{
+          if(p.id!==socket.id){
+            const o=document.createElement('option');
+            o.value=p.id; o.text=p.name;
+            d.appendChild(o);
+          }
+        });
       }
     });
 
-    // keep track of latest room‐mate list
-    socket.on('updatePlayerList', players => {
-      window.currentRoomPlayers = players;
-      // … your existing code to repopulate dropdown …
+    socket.on('gameStarted', data=>{
+      // hide lobby controls
+      document.getElementById('startGameBtn').style.display='none';
+      myRole = data.role;
+
+      // show role-specific buttons
+      if(myRole==="THE THING") document.getElementById('consumeBtn').style.display='inline-block';
+      if(myRole==="Soldier")   document.getElementById('soldierBtn').style.display='inline-block';
+
+      // show description tooltip + player number
+      const desc = roleDescriptions[myRole]||"";
+      document.getElementById('playerNumberDisplay').innerHTML =
+        `🎮 You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
+         Role: <span title="${desc}" style="text-decoration:underline dotted;cursor:help;">${myRole}</span>`;
+      document.getElementById('roundDisplay').innerText = "Round: 1";
+      document.getElementById('bioscannerBtn').style.display='none';
     });
 
-    // feedback after kill
-    socket.on('soldierKillResult', ({ killedThing, targetName }) => {
+    socket.on('newRoundStarted', ({round})=>{
+      document.getElementById('roundDisplay').innerText="Round: "+round;
+      // reset action buttons
+      document.getElementById('submitActionBtn').disabled=true;
+      document.getElementById('endTurnBtn').disabled=true;
+      // re-enable soldier if unused
+      if(myRole==="Soldier") document.getElementById('soldierBtn').disabled=false;
+    });
+
+    socket.on('receiveMessage', ({from,text})=>{
+      const cb=document.getElementById('chatBox');
+      const p=document.createElement('p');
+      p.innerText=`${from}: ${text}`;
+      cb.appendChild(p); cb.scrollTop=cb.scrollHeight;
+    });
+    socket.on('chatError', msg=>alert(msg));
+
+    socket.on('consumeFailed', msg=>alert("❌ "+msg));
+    socket.on('youAreNowTheThing', ()=>alert("👾 You have consumed a player."));
+    socket.on('youHaveBeenConsumed', ()=>alert("💀 You have been consumed."));
+
+    socket.on('bioscannerUnlocked', ()=>{
+      document.getElementById('bioscannerBtn').style.display='inline-block';
+    });
+    socket.on('scanResult', r=>{
+      alert(r.playerName + (r.isTheThing? " IS ":" is NOT ") + "THE THING!");
+      document.getElementById('bioscannerBtn').disabled=false;
+    });
+
+    // Soldier results
+    socket.on('soldierKillResult', ({killedThing,targetName})=>{
       const msg = killedThing
         ? `You’ve slain THE THING (${targetName})!`
         : `You attacked ${targetName}. Both of you are dead.`;
       alert(msg);
     });
-    socket.on('youWereKilledBySoldier', () => {
+    socket.on('youWereKilledBySoldier', ()=>{
       alert("💀 You were killed by the Soldier.");
-      // you may also want to disable your buttons:
-      document.getElementById('submitActionBtn').disabled = true;
-      document.getElementById('endTurnBtn').disabled = true;
+      // disable further actions
+      document.getElementById('submitActionBtn').disabled=true;
+      document.getElementById('endTurnBtn').disabled=true;
     });
 
-    socket.on('gameStarted', (data) => {
-      document.getElementById('startGameBtn').style.display = 'none';
-
-      myRole = data.role;
-      if (myRole === "THE THING") {
-        document.getElementById('consumeBtn').style.display = 'inline-block';
-      }
-
-      // 🛠 Use tooltip for the role description
-      const desc = roleDescriptions[myRole] || "No description available.";
-
-      document.getElementById('playerNumberDisplay').innerHTML =
-        `🎮 Game started! You are Player ${data.playerNumber} of ${data.totalPlayers}.<br>
-         Your role: <span title="${desc}" style="text-decoration: underline dotted; cursor: help;">${myRole}</span>`;
-
-      document.getElementById('roundDisplay').innerText = "Round: 1";
-
-      document.getElementById('bioscannerBtn').style.display = 'none';
+    // Emergency meeting
+    socket.on('emergencyMeetingStarted', ({calledBy})=>{
+      alert("🚨 Emergency meeting called!");
     });
 
-    socket.on('receiveMessage', ({ from, text }) => {
-      const chatBox = document.getElementById('chatBox');
-      const p = document.createElement('p');
-      p.innerText = `${from}: ${text}`;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
+    // Comms Expert
+    socket.on('showCommsPopup', ()=>{
+      document.getElementById('commsPopup').style.display='block';
+    });
+    socket.on('hideCommsPopup', ()=>{
+      document.getElementById('commsPopup').style.display='none';
     });
 
-    socket.on('chatError', (msg) => {
-      alert(msg);
-      if (myRole === 'Engineer') {
-        document.getElementById('bioscannerBtn').disabled = false;
-      }
-    });
-
-    socket.on('emergencyMeetingStarted', ({ calledBy }) => {
-      const chatBox = document.getElementById('chatBox');
-      const p = document.createElement('p');
-      p.innerText = `🚨 Emergency meeting called by ${calledBy}!`;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    });
-
-    socket.on('consumeFailed', (msg) => {
-      alert("❌ Failed to consume: " + msg);
-    });
-
-    socket.on('youAreNowTheThing', () => {
-      alert("👾 You have consumed a player. You are now them.");
-      myRole = "THE THING";
-      document.getElementById('consumeBtn').style.display = 'inline-block';
-    });
-
-    socket.on('youHaveBeenConsumed', () => {
-      alert("💀 You have been consumed by THE THING.");
-    });
-
-    socket.on('newRoundStarted', ({ round }) => {
-      document.getElementById('roundDisplay').innerText = "Round: " + round;
-      document.getElementById('submitActionBtn').disabled = true;
-      document.getElementById('endTurnBtn').disabled = true;
-    });
-
-    // Show the popup for the Comms Expert
-    socket.on('showCommsPopup', (data) => {
-      console.log('Showing Comms Expert popup');  // Debugging log
-      document.getElementById('commsPopup').style.display = 'block';  // Show popup
-      document.getElementById('commsMessage').value = '';  // Clear any previous message
-    });
-
-    // Send the Comms Expert's message to everyone anonymously
-    function sendCommsMessage() {
-      const message = document.getElementById('commsMessage').value;
-      
-      if (message.trim() === '') {
-        alert('Please type a message.');
-        return;
-      }
-
-      // Send the global message to the server
-      socket.emit('sendCommsMessage', { text: message });
-
-      // Hide the popup after sending
-      document.getElementById('commsPopup').style.display = 'none';
-    }
-
-    // Listen for the event to hide the Comms Expert's popup after sending the message
-    socket.on('hideCommsPopup', () => {
-      document.getElementById('commsPopup').style.display = 'none';
-    });
-
-    // Display notification for Security Expert when someone visits their room
-    socket.on('chatMessage', (data) => {
-      if (data.from === 'System' && data.text === 'Someone visited your room.') {
+    // Security Expert
+    socket.on('chatMessage', d=>{
+      if(d.from==='System' && d.text==='Someone visited your room.')
         alert('Security Alert: Someone visited your room!');
-      }
     });
-
   </script>
 </body>
 </html>
