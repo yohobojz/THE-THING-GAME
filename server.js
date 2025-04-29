@@ -271,39 +271,59 @@ io.on('connection', (socket) => {
   });
 
   socket.on('consumePlayer', () => {
-    const me = playerData[socket.id];
-    if (!me) return;
+  const me = playerData[socket.id];
+  if (!me) return;
+  if (me.role !== "THE THING" || me.endedTurn) {
+    socket.emit("consumeFailed", "Can't consume!");
+    return;
+  }
 
-    if (me.role !== "THE THING" || me.endedTurn) {
-      socket.emit("consumeFailed", "Can't consume!");
-      return;
-    }
+  const lobbyId = me.lobbyId;
+  const roomMates = Object.entries(playerData)
+    .filter(([id, p]) =>
+      p.lobbyId === lobbyId &&
+      p.currentRoom === me.currentRoom &&
+      id !== socket.id &&
+      p.role !== "DEAD"
+    );
+  if (roundNumber[lobbyId] === 1) {
+    socket.emit("consumeFailed", "You can't consume on Round 1.");
+    return;
+  }
+  if (roomMates.length !== 1) {
+    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+    return;
+  }
 
-    const lobbyId = me.lobbyId;
+  const [victimId] = roomMates[0];
 
-    const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
+  // Capture the old THING's endedTurn status:
+  const oldEnded = me.endedTurn;
 
-    if (roundNumber[lobbyId] === 1) {
-      socket.emit("consumeFailed", "You can't consume on Round 1.");
-      return;
-    }
+  // 1) Old THING dies:
+  me.role = "DEAD";
+  me.endedTurn = true;
 
-    if (roomMates.length !== 1) {
-      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-      return;
-    }
+  // 2) Promote the victim to THE THING, and inherit oldEnded:
+  const newThing = playerData[victimId];
+  newThing.role = "THE THING";
+  newThing.endedTurn = oldEnded;
 
-    const [victimId] = roomMates[0];
+  // 3) Transfer room identity if needed
+  me.currentRoom = null;
 
-    playerData[socket.id].role = "DEAD";
-    playerData[socket.id].endedTurn = true;
-    playerData[victimId].role = "THE THING";
-    playerData[socket.id].currentRoom = null;
-
-    io.to(victimId).emit("youHaveBeenConsumed");
-    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
-    io.to(socket.id).emit("youAreNowTheThing");
+  // 4) Notify clients:
+  io.to(victimId).emit("youHaveBeenConsumed");
+  io.to(victimId).emit("gameStarted", {
+    playerNumber: "???",
+    totalPlayers: "???",
+    role: "DEAD"
   });
+  io.to(socket.id).emit("youAreNowTheThing");
+
+  // 5) Refresh UI lists
+  emitPlayerLists(lobbyId);
+});
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
