@@ -179,16 +179,7 @@ io.on('connection', (socket) => {
         io.to(socket.id).emit('chatMessage', { from: 'System', text: 'Someone visited your room.' });
       }
     }
-    
-    if (player.role === "THE THING" && player.intendedAction === "visit" && player.intendedTarget) {
-      const target = playerData[player.intendedTarget];
-      if (target && target.currentRoom === player.currentRoom) {
-        // Prevent the THING from visiting the consumed player's room
-        socket.emit("chatError", "You cannot visit the room of the player you have consumed.");
-        return;
-      }
-    }
-    
+
     if (player.intendedAction === "hold") {
       player.currentRoom = socket.id;
     } else if (player.intendedAction === "visit" && player.intendedTarget) {
@@ -198,7 +189,7 @@ io.on('connection', (socket) => {
     player.lastAction = player.intendedAction;
     player.intendedAction = null;
     player.intendedTarget = null;
-   });
+  });
 
   socket.on('endTurn', () => {
     const player = playerData[socket.id];
@@ -265,82 +256,38 @@ io.on('connection', (socket) => {
   });
 
   socket.on('consumePlayer', () => {
-  const me = playerData[socket.id];
-  if (!me) return;
+    const me = playerData[socket.id];
+    if (!me) return;
 
-  if (me.role !== "THE THING" || me.endedTurn) {
-    socket.emit("consumeFailed", "Can't consume!");
-    return;
-  }
+    if (me.role !== "THE THING" || me.endedTurn) {
+      socket.emit("consumeFailed", "Can't consume!");
+      return;
+    }
 
-  const lobbyId = me.lobbyId;
+    const lobbyId = me.lobbyId;
 
-  // Ensure the lobby exists
-  if (!lobbies[lobbyId]) {
-    console.error(`Error: Lobby with ID ${lobbyId} does not exist!`);
-    return;
-  }
+    const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
 
-  // Ensure playerData for the lobby exists
-  if (!playerData[lobbyId]) {
-    console.error(`Error: playerData for lobby with ID ${lobbyId} does not exist!`);
-    return;
-  }
+    if (roundNumber[lobbyId] === 1) {
+      socket.emit("consumeFailed", "You can't consume on Round 1.");
+      return;
+    }
 
-  // Get the roommates in the current room
-  const roomMates = Object.entries(playerData).filter(([id, p]) => p.lobbyId === lobbyId && p.currentRoom === me.currentRoom && id !== socket.id && p.role !== "DEAD");
+    if (roomMates.length !== 1) {
+      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+      return;
+    }
 
-  if (roundNumber[lobbyId] === 1) {
-    socket.emit("consumeFailed", "You can't consume on Round 1.");
-    return;
-  }
+    const [victimId] = roomMates[0];
 
-  if (roomMates.length !== 1) {
-    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-    return;
-  }
+    playerData[socket.id].role = "DEAD";
+    playerData[victimId].role = "THE THING";
+    playerData[socket.id].currentRoom = null;
 
-  const [victimId, victim] = roomMates[0]; // Get the victim's ID and data
-
-  // Consume the player: Change roles
-  playerData[socket.id].role = "DEAD";  // The THING dies (consumes)
-  playerData[victimId].role = "THE THING";  // The consumed player becomes THE THING
-  playerData[socket.id].currentRoom = null;  // The THING is no longer in the room
-
-  // Set the THING's new room to the consumed player's room
-  playerData[socket.id].currentRoom = playerData[victimId].currentRoom;
-
-  // Track the consumed player's identity for the THING
-  playerData[socket.id].consumedPlayer = {
-    id: victimId,
-    name: victim.displayName,
-    playerNumber: victimId.substring(0, 5) // Extract player number
-  };
-
-  // Broadcast messages to the players (don't broadcast a "System" message)
-  io.to(victimId).emit("youHaveBeenConsumed");
-  io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
-  io.to(socket.id).emit("youAreNowTheThing");
-
-  // Update the dropdown (exclude the room of the consumed player from the list)
-  emitPlayerLists(lobbyId);
-
-  // Update the chat to reflect the new identity of the THING
-  const newName = victim.displayName; // The THING now uses the consumed player's name
-  io.to(lobbyId).emit('receiveMessage', { from: newName, text: `THE THING has consumed Player ${victim.displayName}.` });
-
-  // Ensure that the THING can no longer visit the room of the consumed player
-  io.to(socket.id).emit('updatePlayerList', playerData[lobbyId].players.filter(id => id !== victimId));
-
-  // Check if playerData[lobbyId] is properly structured
-  if (!playerData[lobbyId]?.players) {
-    console.error(`Error: 'players' not found in playerData for lobby: ${lobbyId}`);
-  }
-
-  // Update player list to reflect that the THING's room and identity have changed
-  // You should probably also reset the old identity’s room.
-  io.to(lobbyId).emit('updatePlayerList', playerData[lobbyId].players);
-});
+    io.to(victimId).emit("youHaveBeenConsumed");
+    io.to(victimId).emit("gameStarted", { playerNumber: "???", totalPlayers: "???", role: "DEAD" });
+    io.to(socket.id).emit("youAreNowTheThing");
+  });
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
