@@ -212,8 +212,8 @@ io.on('connection', (socket) => {
 
    // Only count players who are not DEAD
   const alivePlayers = lobby.players.filter(
-    id => playerData[id]?.role !== "DEAD"
-  );
+  id => playerData[id].role !== "DEAD"
+);
 
  // === DEBUG: alivePlayers list ===
   console.log(`  Alive players: ${alivePlayers.join(', ')}`);
