@@ -269,60 +269,60 @@ io.on('connection', (socket) => {
     socket.emit('hideCommsPopup');
   });
 
-      socket.on('consumePlayer', () => {
-    const me = playerData[socket.id];
-    if (!me) return;
+socket.on('consumePlayer', () => {
+  const me = playerData[socket.id];
+  if (!me) return;
 
-    // only THE THING, and only if they haven't ended their turn yet
-    if (me.role !== "THE THING" || me.endedTurn) {
-      socket.emit("consumeFailed", "Can't consume!");
-      return;
-    }
+  // Only the Thing, and only before ending your turn
+  if (me.role !== "THE THING" || me.endedTurn) {
+    socket.emit("consumeFailed", "Can't consume!");
+    return;
+  }
 
-    const lobbyId = me.lobbyId;
-    const roomMates = Object.entries(playerData)
-      .filter(([id,p]) =>
-        p.lobbyId === lobbyId &&
-        p.currentRoom === me.currentRoom &&
-        id !== socket.id &&
-        p.role !== "DEAD"
-      );
+  const lobbyId = me.lobbyId;
+  const roomMates = Object.entries(playerData)
+    .filter(([id,p]) =>
+      p.lobbyId === lobbyId &&
+      p.currentRoom === me.currentRoom &&
+      id !== socket.id &&
+      p.role !== "DEAD"
+    );
 
-    if (roundNumber[lobbyId] === 1) {
-      socket.emit("consumeFailed", "You can't consume on Round 1.");
-      return;
-    }
-    if (roomMates.length !== 1) {
-      socket.emit("consumeFailed", "You must be alone with exactly one other player.");
-      return;
-    }
+  if (roundNumber[lobbyId] === 1) {
+    socket.emit("consumeFailed", "You can't consume on Round 1.");
+    return;
+  }
+  if (roomMates.length !== 1) {
+    socket.emit("consumeFailed", "You must be alone with exactly one other player.");
+    return;
+  }
 
-    const [victimId, victim] = roomMates[0];
+  const [victimId, victim] = roomMates[0];
 
-    // 1) Original Thing is now DEAD
-    me.role       = "DEAD";
-    me.endedTurn  = true;
-    me.currentRoom = null;
+  // 1) Kill the victim
+  victim.role       = "DEAD";
+  victim.endedTurn  = true;
+  victim.currentRoom = null;
 
-    // 2) Victim becomes THE THING
-    victim.role       = "THE THING";
-    // let them act next round
-    victim.endedTurn  = false;
+  // 2) You stay THE THING, but inherit their room & name
+  me.currentRoom   = victimId;
+  // Optional: swap displayName so chat shows "Player X"
+  me.displayName   = victim.displayName;
 
-    // 3) Notify original Thing that they’ve been consumed
-    io.to(socket.id).emit("youHaveBeenConsumed");
-    io.to(socket.id).emit("gameStarted", {
-      playerNumber: "???",
-      totalPlayers: "???",
-      role: "DEAD"
-    });
-
-    // 4) Notify the new Thing
-    io.to(victimId).emit("youAreNowTheThing");
-
-    // 5) Refresh everyone’s UI
-    emitPlayerLists(lobbyId);
+  // 3) Tell the victim they’ve been consumed
+  io.to(victimId).emit("youHaveBeenConsumed");
+  io.to(victimId).emit("gameStarted", {
+    playerNumber: "???",
+    totalPlayers: "???",
+    role: "DEAD"
   });
+
+  // 4) Tell you that you’ve successfully consumed
+  io.to(socket.id).emit("youAreNowTheThing");
+
+  // 5) Refresh everyone’s UI
+  emitPlayerLists(lobbyId);
+});
 
   socket.on('scanPlayer', ({ target }) => {
     const player = playerData[socket.id];
