@@ -407,7 +407,7 @@ socket.on('useSoldier', ({ target }) => {
 
 function emitPlayerLists(lobbyId) {
   const names = lobbies[lobbyId].players.map(id => playerData[id]?.displayName || id.substring(0, 5));
-  const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown", currentRoom: playerData[id]?.currentRoom }));
+  const playerInfos = lobbies[lobbyId].players.map(id => ({ id, name: playerData[id]?.displayName || "Unknown" }));
   io.to(lobbyId).emit('playerListUpdated', names);
   io.to(lobbyId).emit('updatePlayerList', playerInfos);
 }
