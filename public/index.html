@@ -1,3 +1,4 @@
+<!-- Paste your current index.html content below -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -151,24 +152,32 @@
 
     // Soldier popup
     function showSoldierPopup(){
-      const sel = document.getElementById('soldierSelect');
-      sel.innerHTML = '';
-      currentRoomPlayers
-        .filter(p=>p.id!==socket.id)
-        .forEach(p=>{
-          const o = document.createElement('option');
-          o.value = p.id; o.text = p.name;
-          sel.appendChild(o);
-        });
-      document.getElementById('soldierPopup').style.display='block';
-    }
+  const sel = document.getElementById('soldierSelect');
+  sel.innerHTML = '';
+  currentRoomPlayers
+    .filter(p => p.id !== socket.id)
+    .forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.text = p.name;
+      sel.appendChild(o);
+    });
+  document.getElementById('soldierPopup').style.display = 'block';
+}
     function confirmKill(){
-      const target = document.getElementById('soldierSelect').value;
-      socket.emit('useSoldier',{target});
-      document.getElementById('soldierPopup').style.display='none';
-      document.getElementById('soldierBtn').disabled = true;
-    }
-
+  const select = document.getElementById('soldierSelect');
+  const target = select.value;
+  const name   = select.selectedOptions[0]?.text;
+  if (!name) {
+    alert('No target selected.');
+    return document.getElementById('soldierPopup').style.display='none';
+  }
+  if (!confirm(`Are you sure you want to kill ${name}?`)) {
+    return document.getElementById('soldierPopup').style.display='none';
+  }
+  socket.emit('useSoldier',{ target });
+  document.getElementById('soldierPopup').style.display='none';
+  document.getElementById('soldierBtn').disabled = true;
+}
     // ==== Socket handlers ====
 
     socket.on('lobbyCreated', data=>{
@@ -242,7 +251,12 @@
       p.innerText=`${from}: ${text}`;
       cb.appendChild(p); cb.scrollTop=cb.scrollHeight;
     });
-    socket.on('chatError', msg=>alert(msg));
+    socket.on('chatError', msg => {
+  alert(msg);
+  if (myRole === "Soldier") {
+    document.getElementById('soldierBtn').disabled = false;
+  }
+});
 
     socket.on('consumeFailed', msg=>alert("❌ "+msg));
     socket.on('youAreNowTheThing', ()=>alert("👾 You have consumed a player."));
