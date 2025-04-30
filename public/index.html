@@ -199,38 +199,24 @@
     });
 
     // both for visit dropdown & soldier popup
-    // both for visit dropdown & soldier popup
-socket.on('updatePlayerList', players => {
-  // 1) locate your own object so you know your room
-  const me     = players.find(p => p.id === socket.id);
-  const myRoom = me ? me.currentRoom : null;
-
-  // 2) only keep folks in the same room
-  const roomPlayers = myRoom
-    ? players.filter(p => p.currentRoom === myRoom)
-    : [];
-
-  // keep a reference for showSoldierPopup()
-  currentRoomPlayers = roomPlayers;
-
-  // 3) rebuild the Visit dropdown from roomPlayers
-  const d = document.getElementById('playerSelect');
-  d.innerHTML = '';
-  if (roomPlayers.length <= 1) {
-    const o = document.createElement('option');
-    o.text = "(waiting…)"; o.disabled = true;
-    d.appendChild(o);
-  } else {
-    roomPlayers.forEach(p => {
-      if (p.id !== socket.id) {
-        const o = document.createElement('option');
-        o.value = p.id;
-        o.text  = p.name;
+    socket.on('updatePlayerList', players=>{
+      currentRoomPlayers = players; 
+      const d = document.getElementById('playerSelect');
+      d.innerHTML = '';
+      if(players.length<=1){
+        const o=document.createElement('option');
+        o.text="(waiting…)"; o.disabled=true;
         d.appendChild(o);
+      } else {
+        players.forEach(p=>{
+          if(p.id!==socket.id){
+            const o=document.createElement('option');
+            o.value=p.id; o.text=p.name;
+            d.appendChild(o);
+          }
+        });
       }
     });
-  }
-});
 
     socket.on('gameStarted', data=>{
       // hide lobby controls
