@@ -341,34 +341,34 @@ socket.on('consumePlayer', () => {
   });
 
 // --- SOLDIER ABILITY ---
-  socket.on('useSoldier', ({ target }) => {
-    const me = playerData[socket.id];
-    const victim = playerData[target];
-    if (!me || !victim) return;
-    // must be soldier, not used yet, and before ending turn
-    if (me.role !== 'Soldier' || me.soldierUsed || me.endedTurn) {
-      return socket.emit('chatError','Cannot use your kill right now.');
-    }
-    // must be in same room
-    if (me.currentRoom !== victim.currentRoom) {
-      return socket.emit('chatError','Target not in your room.');
-    }
+socket.on('useSoldier', ({ target }) => {
+  const me     = playerData[socket.id];
+  const victim = playerData[target];
+  if (!me || !victim) return socket.emit('chatError','Cannot use your kill right now.');
 
-    // mark used
+  // Pre‐checks
+  if (me.role !== 'Soldier' || me.soldierUsed || me.endedTurn) {
+    return socket.emit('chatError','Cannot use your kill right now.');
+  }
+  if (me.currentRoom !== victim.currentRoom) {
+    return socket.emit('chatError','Target not in your room.');
+  }
+
+  try {
+    // ——— Now we _know_ it’s valid, so mark it used ———
     me.soldierUsed = true;
 
-    // if victim is THE THING
     if (victim.role === 'THE THING') {
+      // successful Thing kill…
       victim.role      = 'DEAD';
       victim.endedTurn = true;
-      // notify victim & soldier
       io.to(target).emit('youWereKilledBySoldier');
       io.to(socket.id).emit('soldierKillResult',{
         killedThing: true,
         targetName: victim.displayName
       });
     } else {
-      // innocent → both die
+      // innocent→both die…
       victim.role      = 'DEAD';
       victim.endedTurn = true;
       me.role          = 'DEAD';
@@ -380,10 +380,14 @@ socket.on('consumePlayer', () => {
       });
     }
 
-    // refresh lists so DEAD count out of future turns
-    const lobbyId = me.lobbyId;
-    emitPlayerLists(lobbyId);
-  });
+    emitPlayerLists(me.lobbyId);
+  } catch (err) {
+    // On any unexpected error, roll back the “used” flag
+    me.soldierUsed = false;
+    console.error('Error in useSoldier:', err);
+    socket.emit('chatError','Something went wrong — your kill is still available.');
+  }
+});
 
   socket.on('disconnect', () => {
     for (const lobbyId in lobbies) {
